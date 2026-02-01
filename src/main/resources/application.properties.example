@@ -1,0 +1,64 @@
+# =========================
+# Server Configuration
+# =========================
+server.port=8080
+
+# =========================
+# MongoDB Configuration
+# =========================
+# Replace with your MongoDB connection string
+# Format: mongodb://username:password@host:port/database
+spring.data.mongodb.uri=mongodb://username:password@localhost:27017/your_database
+spring.data.mongodb.database=your_database
+
+# =========================
+# JPA Configuration
+# =========================
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+
+# =========================
+# JSP View Configuration
+# =========================
+spring.mvc.view.prefix=/WEB-INF/views/
+spring.mvc.view.suffix=.jsp
+
+# =========================
+# Swagger Configuration
+# =========================
+springdoc.api-docs.path=/api-docs
+springdoc.swagger-ui.path=/swagger-ui.html
+
+# =========================
+# Logging Configuration
+# =========================
+logging.level.root=INFO
+logging.level.com.app=DEBUG
+
+# =========================
+# Telegram Bot Configuration
+# =========================
+# Get your bot token from @BotFather on Telegram
+# Option 1: Set via environment variable (recommended)
+telegram.bot.token=${TELEGRAM_BOT_TOKEN}
+telegram.bot.username=${TELEGRAM_BOT_USERNAME}
+# Option 2: Set directly (NOT recommended for production)
+# telegram.bot.token=your-bot-token-here
+# telegram.bot.username=YourBotUsername
+telegram.notification.enabled=true
+telegram.default-min-drop-percentage=15
+
+# =========================
+# Scraper Configuration
+# =========================
+scraper.rate-limit.requests-per-second=1
+scraper.user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36
+scraper.timeout-seconds=30
+scraper.headless=true
+
+# =========================
+# Resilience4j Rate Limiter Configuration
+# =========================
+resilience4j.ratelimiter.instances.scraper.limitForPeriod=1
+resilience4j.ratelimiter.instances.scraper.limitRefreshPeriod=1s
+resilience4j.ratelimiter.instances.scraper.timeoutDuration=5s

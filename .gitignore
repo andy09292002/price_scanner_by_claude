@@ -1,0 +1,134 @@
+# =========================
+# Maven
+# =========================
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# =========================
+# IDE - IntelliJ IDEA
+# =========================
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# =========================
+# IDE - Eclipse
+# =========================
+.classpath
+.project
+.settings/
+bin/
+
+# =========================
+# IDE - VS Code
+# =========================
+.vscode/
+
+# =========================
+# IDE - NetBeans
+# =========================
+nbproject/private/
+build/
+nbbuild/
+dist/
+nbdist/
+nbactions.xml
+nb-configuration.xml
+
+# =========================
+# OS Generated Files
+# =========================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+*.log.*
+
+# =========================
+# Sensitive/Secret Files - CRITICAL
+# =========================
+# Application properties with real credentials
+application.properties
+application-*.properties
+!application.properties.example
+!application-*.properties.example
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# API Keys and secrets
+**/secrets/
+**/secret/
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
+
+# Telegram configuration
+telegram-config.properties
+telegram-*.properties
+
+# Database credentials
+database.properties
+db-*.properties
+
+# =========================
+# Spring Boot
+# =========================
+# Ignore Spring Boot DevTools reload trigger
+.reloadTrigger
+
+# =========================
+# Test Files
+# =========================
+# Ignore test output
+test-output/
+surefire-reports/
+
+# =========================
+# Temp Files
+# =========================
+*.tmp
+*.temp
+*.swp
+*~
+nul
+
+# =========================
+# Package Files
+# =========================
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# =========================
+# Claude CLI
+# =========================
+.claude/settings.local.json
