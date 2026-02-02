@@ -132,7 +132,8 @@ public class PriceSmartScraper extends AbstractStoreScraper {
         }
 
         String sizeText = extractText(element, ".product-size, .size");
-        String size = sizeText != null ? sizeText : extractSize(name);
+        String size = sizeText != null ? extractSize(sizeText) : extractSize(name);
+        String unit = sizeText != null ? extractUnit(sizeText) : extractUnit(name);
 
         boolean inStock = !element.hasClass("out-of-stock") &&
                          element.selectFirst(".out-of-stock, .sold-out") == null;
@@ -142,7 +143,7 @@ public class PriceSmartScraper extends AbstractStoreScraper {
                 name,
                 brand,
                 size,
-                null,
+                unit,
                 null,
                 imageUrl,
                 regularPrice,

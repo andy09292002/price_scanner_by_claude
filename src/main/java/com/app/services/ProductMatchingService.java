@@ -84,9 +84,18 @@ public class ProductMatchingService {
             updated = true;
         }
 
-        // Update size if we don't have one
-        if (product.getSize() == null && scrapedProduct.size() != null) {
-            product.setSize(scrapedProduct.size());
+        // Update size if we don't have one or if current size contains non-numeric characters
+        if (scrapedProduct.size() != null) {
+            if (product.getSize() == null || !product.getSize().matches("\\d+(\\.\\d+)?")) {
+                product.setSize(scrapedProduct.size());
+                updated = true;
+            }
+        }
+
+        // Update unit if we don't have one
+        if ((product.getUnit() == null || product.getUnit().isEmpty()) &&
+            scrapedProduct.unit() != null && !scrapedProduct.unit().isEmpty()) {
+            product.setUnit(scrapedProduct.unit());
             updated = true;
         }
 
@@ -114,18 +123,38 @@ public class ProductMatchingService {
         }
     }
 
-    private String findOrCreateCategory(String categoryName) {
-        if (categoryName == null || categoryName.isBlank()) {
+    private String findOrCreateCategory(String categoryInput) {
+        if (categoryInput == null || categoryInput.isBlank()) {
             return null;
         }
 
-        String categoryCode = normalizeCategoryCode(categoryName);
+        String categoryCode;
+        String categoryName;
 
-        Optional<Category> existing = categoryRepository.findByCode(categoryCode);
-        if (existing.isPresent()) {
-            return existing.get().getId();
+        // Check if input is in "code:name" format
+        if (categoryInput.contains(":")) {
+            String[] parts = categoryInput.split(":", 2);
+            categoryCode = parts[0];
+            categoryName = parts[1];
+        } else {
+            // Fallback to normalizing the input as both code and name
+            categoryCode = normalizeCategoryCode(categoryInput);
+            categoryName = categoryInput;
         }
 
+        // Try to find by code
+        Optional<Category> existing = categoryRepository.findByCode(categoryCode);
+        if (existing.isPresent()) {
+            Category category = existing.get();
+            // Update name if it was stored as numeric ID
+            if (category.getName().matches("\\d+") && !categoryName.matches("\\d+")) {
+                category.setName(categoryName);
+                categoryRepository.save(category);
+            }
+            return category.getId();
+        }
+
+        // Create new category
         Category category = Category.builder()
                 .name(categoryName)
                 .code(categoryCode)

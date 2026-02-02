@@ -68,6 +68,7 @@ class ProductMatchingServiceTest {
                 .normalizedName("organic bananas 1kg")
                 .brand("Dole")
                 .size("1kg")
+                .imageUrl("http://example.com/banana.jpg")
                 .storeProductIds(storeProductIds)
                 .build();
         existingProduct.setId("prod-123");
@@ -90,7 +91,6 @@ class ProductMatchingServiceTest {
                 .thenReturn(Optional.empty());
         when(productRepository.findByNormalizedName("organic bananas 1kg"))
                 .thenReturn(Optional.of(existingProduct));
-        when(productRepository.save(any(Product.class))).thenReturn(existingProduct);
 
         Product result = productMatchingService.findOrCreateProduct(scrapedProduct, testStore);
 

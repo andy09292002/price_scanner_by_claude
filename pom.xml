@@ -112,19 +112,6 @@
             <version>1.17.2</version>
         </dependency>
 
-        <!-- Selenium for JS-heavy sites -->
-        <dependency>
-            <groupId>org.seleniumhq.selenium</groupId>
-            <artifactId>selenium-java</artifactId>
-            <version>4.16.1</version>
-        </dependency>
-
-        <dependency>
-            <groupId>io.github.bonigarcia</groupId>
-            <artifactId>webdrivermanager</artifactId>
-            <version>5.6.3</version>
-        </dependency>
-
         <!-- Rate limiting -->
         <dependency>
             <groupId>io.github.resilience4j</groupId>

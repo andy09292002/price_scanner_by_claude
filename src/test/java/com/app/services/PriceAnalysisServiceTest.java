@@ -292,7 +292,6 @@ class PriceAnalysisServiceTest {
         when(storeRepository.findByActiveTrue()).thenReturn(List.of(testStore));
         when(priceRecordRepository.findByStoreIdAndScrapedAtAfter(eq("store-123"), any()))
                 .thenReturn(List.of(currentRecord, smallDropCurrent));
-        when(productRepository.findById("prod-123")).thenReturn(Optional.of(testProduct));
 
         // 30% drop should pass 20% threshold, 5% drop should not
         List<PriceAnalysisService.PriceDrop> drops =

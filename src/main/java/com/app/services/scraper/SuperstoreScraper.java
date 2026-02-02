@@ -121,7 +121,8 @@ public class SuperstoreScraper extends AbstractStoreScraper {
         }
 
         String sizeText = extractText(element, ".product-size, [data-testid='product-size']");
-        String size = sizeText != null ? sizeText : extractSize(name);
+        String size = sizeText != null ? extractSize(sizeText) : extractSize(name);
+        String unit = sizeText != null ? extractUnit(sizeText) : extractUnit(name);
 
         boolean inStock = !element.hasClass("out-of-stock") &&
                          element.selectFirst(".out-of-stock-badge") == null;
@@ -131,7 +132,7 @@ public class SuperstoreScraper extends AbstractStoreScraper {
                 name,
                 brand,
                 size,
-                null, // unit extracted from size
+                unit,
                 null, // category determined later
                 imageUrl,
                 regularPrice,

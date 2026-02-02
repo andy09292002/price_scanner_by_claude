@@ -92,14 +92,29 @@ public abstract class AbstractStoreScraper implements StoreScraper {
                 .trim();
     }
 
+    private static final Pattern SIZE_PATTERN = Pattern.compile(
+            "(\\d+(?:\\.\\d+)?)\\s*(kg|kgs|g|gm|gms|gram|grams|lb|lbs|oz|ml|mls|l|litre|litres|liter|liters|pack|packs|pk|ct|count|pcs|pc|piece|pieces|ea|each|unit|units)",
+            Pattern.CASE_INSENSITIVE
+    );
+
     protected String extractSize(String text) {
         if (text == null) {
             return null;
         }
-        Pattern sizePattern = Pattern.compile("(\\d+(?:\\.\\d+)?\\s*(?:kg|g|lb|oz|ml|l|L|pack|pk|ct|count))", Pattern.CASE_INSENSITIVE);
-        Matcher matcher = sizePattern.matcher(text);
+        Matcher matcher = SIZE_PATTERN.matcher(text);
         if (matcher.find()) {
-            return matcher.group(1);
+            return matcher.group(1);  // Return only the numeric part
+        }
+        return null;
+    }
+
+    protected String extractUnit(String text) {
+        if (text == null) {
+            return null;
+        }
+        Matcher matcher = SIZE_PATTERN.matcher(text);
+        if (matcher.find()) {
+            return matcher.group(2).toLowerCase();  // Return only the unit part
         }
         return null;
     }
