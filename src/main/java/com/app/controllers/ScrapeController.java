@@ -25,7 +25,7 @@ public class ScrapeController {
     @Operation(summary = "Trigger scrape for one store",
                description = "Starts a scraping job for the specified store. Returns immediately with job info.")
     public ResponseEntity<ScrapeJob> triggerScrape(
-            @Parameter(description = "Store code (RCSS, WALMART, PRICESMART, TNT)")
+                @Parameter(description = "Store code (RCSS, WALMART, PRICESMART, TNT)")
             @PathVariable String storeCode) {
 
         log.info("Triggering scrape for store: {}", storeCode);

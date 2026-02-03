@@ -53,7 +53,7 @@ public class ProductMatchingService {
         Map<String, String> storeProductIds = new HashMap<>();
         storeProductIds.put(store.getCode(), scrapedProduct.storeProductId());
 
-        String categoryId = findOrCreateCategory(scrapedProduct.category());
+        String categoryId = findOrCreateCategory(scrapedProduct.category(), store);
 
         Product product = Product.builder()
                 .name(scrapedProduct.name())
@@ -84,19 +84,20 @@ public class ProductMatchingService {
             updated = true;
         }
 
-        // Update size if we don't have one or if current size contains non-numeric characters
-        if (scrapedProduct.size() != null) {
-            if (product.getSize() == null || !product.getSize().matches("\\d+(\\.\\d+)?")) {
+        // Update size if we have new valid data
+        if (scrapedProduct.size() != null && !scrapedProduct.size().isEmpty()) {
+            if (product.getSize() == null || !product.getSize().equals(scrapedProduct.size())) {
                 product.setSize(scrapedProduct.size());
                 updated = true;
             }
         }
 
-        // Update unit if we don't have one
-        if ((product.getUnit() == null || product.getUnit().isEmpty()) &&
-            scrapedProduct.unit() != null && !scrapedProduct.unit().isEmpty()) {
-            product.setUnit(scrapedProduct.unit());
-            updated = true;
+        // Update unit if we have new valid data
+        if (scrapedProduct.unit() != null && !scrapedProduct.unit().isEmpty()) {
+            if (product.getUnit() == null || !product.getUnit().equals(scrapedProduct.unit())) {
+                product.setUnit(scrapedProduct.unit());
+                updated = true;
+            }
         }
 
         // Ensure store mapping exists
@@ -106,6 +107,15 @@ public class ProductMatchingService {
         if (!product.getStoreProductIds().containsKey(store.getCode())) {
             product.getStoreProductIds().put(store.getCode(), scrapedProduct.storeProductId());
             updated = true;
+        }
+
+        // Update category if not set
+        if (product.getCategoryId() == null && scrapedProduct.category() != null && !scrapedProduct.category().isBlank()) {
+            String categoryId = findOrCreateCategory(scrapedProduct.category(), store);
+            if (categoryId != null) {
+                product.setCategoryId(categoryId);
+                updated = true;
+            }
         }
 
         if (updated) {
@@ -123,7 +133,7 @@ public class ProductMatchingService {
         }
     }
 
-    private String findOrCreateCategory(String categoryInput) {
+    private String findOrCreateCategory(String categoryInput, Store store) {
         if (categoryInput == null || categoryInput.isBlank()) {
             return null;
         }
@@ -142,8 +152,8 @@ public class ProductMatchingService {
             categoryName = categoryInput;
         }
 
-        // Try to find by code
-        Optional<Category> existing = categoryRepository.findByCode(categoryCode);
+        // Try to find by storeId and code
+        Optional<Category> existing = categoryRepository.findByStoreIdAndCode(store.getId(), categoryCode);
         if (existing.isPresent()) {
             Category category = existing.get();
             // Update name if it was stored as numeric ID
@@ -154,10 +164,11 @@ public class ProductMatchingService {
             return category.getId();
         }
 
-        // Create new category
+        // Create new category with storeId
         Category category = Category.builder()
                 .name(categoryName)
                 .code(categoryCode)
+                .storeId(store.getId())
                 .build();
 
         return categoryRepository.save(category).getId();

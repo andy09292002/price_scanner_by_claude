@@ -92,8 +92,9 @@ public abstract class AbstractStoreScraper implements StoreScraper {
                 .trim();
     }
 
+    // Use [\\s\\u00A0]* to match regular whitespace and non-breaking spaces
     private static final Pattern SIZE_PATTERN = Pattern.compile(
-            "(\\d+(?:\\.\\d+)?)\\s*(kg|kgs|g|gm|gms|gram|grams|lb|lbs|oz|ml|mls|l|litre|litres|liter|liters|pack|packs|pk|ct|count|pcs|pc|piece|pieces|ea|each|unit|units)",
+            "(\\d+(?:\\.\\d+)?)[\\s\\u00A0]*(kg|kgs|g|gm|gms|gram|grams|lb|lbs|oz|ml|mls|l|litre|litres|liter|liters|pack|packs|pk|ct|count|pcs|pc|piece|pieces|ea|each|unit|units)",
             Pattern.CASE_INSENSITIVE
     );
 

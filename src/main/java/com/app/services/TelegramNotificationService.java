@@ -192,9 +192,10 @@ public class TelegramNotificationService extends TelegramLongPollingBot {
                 .filter(drop -> {
                     // Filter by category if specified
                     if (subscription.getCategoryFilters() != null && !subscription.getCategoryFilters().isEmpty()) {
-                        return drop.product().getCategoryId() != null &&
+                        String categoryId = drop.product().getCategoryId();
+                        return categoryId != null &&
                                subscription.getCategoryFilters().stream()
-                                       .anyMatch(cat -> drop.product().getCategoryId().contains(cat));
+                                       .anyMatch(cat -> categoryId.contains(cat));
                     }
                     return true;
                 })

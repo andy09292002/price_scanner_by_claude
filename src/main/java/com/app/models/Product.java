@@ -30,6 +30,7 @@ public class Product extends BaseEntity {
 
     private String unit;
 
+    @Indexed
     private String categoryId;
 
     private String imageUrl;

@@ -112,6 +112,13 @@
             <version>1.17.2</version>
         </dependency>
 
+        <!-- Playwright for JavaScript-rendered pages -->
+        <dependency>
+            <groupId>com.microsoft.playwright</groupId>
+            <artifactId>playwright</artifactId>
+            <version>1.41.0</version>
+        </dependency>
+
         <!-- Rate limiting -->
         <dependency>
             <groupId>io.github.resilience4j</groupId>

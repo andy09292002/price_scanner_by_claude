@@ -14,13 +14,21 @@ import org.springframework.data.mongodb.core.mapping.Document;
 @AllArgsConstructor
 @Builder
 @Document(collection = "categories")
+@org.springframework.data.mongodb.core.index.CompoundIndex(
+    name = "store_code_idx",
+    def = "{'storeId': 1, 'code': 1}",
+    unique = true
+)
 public class Category extends BaseEntity {
 
     @Indexed
     private String name;
 
-    @Indexed(unique = true)
+    @Indexed
     private String code;
+
+    @Indexed
+    private String storeId;
 
     private String parentCategoryId;
 }
