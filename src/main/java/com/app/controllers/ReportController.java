@@ -2,6 +2,7 @@ package com.app.controllers;
 
 import com.app.models.PriceRecord;
 import com.app.services.PriceAnalysisService;
+import com.app.services.TelegramNotificationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -13,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @RestController
@@ -22,6 +24,7 @@ import java.util.List;
 public class ReportController {
 
     private final PriceAnalysisService priceAnalysisService;
+    private final TelegramNotificationService telegramNotificationService;
 
     @GetMapping("/price-drops")
     @Operation(summary = "Get items with biggest price reductions",
@@ -97,4 +100,53 @@ public class ReportController {
                 priceAnalysisService.getCurrentSalesForStore(storeCode.toUpperCase(), limit);
         return ResponseEntity.ok(sales);
     }
+
+    @GetMapping("/discounts")
+    @Operation(summary = "Get all discounted items grouped by store",
+               description = "Returns all products currently on discount, grouped by store. Store info appears once per group.")
+    public ResponseEntity<Map<String, PriceAnalysisService.StoreDiscountGroup>> getDiscountedItems(
+            @Parameter(description = "Minimum discount percentage to include")
+            @RequestParam(defaultValue = "10") int minDiscountPercentage) {
+
+        log.debug("Getting discounted items with min {}% discount", minDiscountPercentage);
+        Map<String, PriceAnalysisService.StoreDiscountGroup> discounts =
+                priceAnalysisService.getDiscountReportGroupedByStore(minDiscountPercentage);
+        return ResponseEntity.ok(discounts);
+    }
+
+    @PostMapping("/discounts/telegram")
+    @Operation(summary = "Send discount report to Telegram",
+               description = "Generates a discount report and sends it to all active Telegram subscribers.")
+    public ResponseEntity<DiscountReportResponse> sendDiscountReportToTelegram(
+            @Parameter(description = "Minimum discount percentage to include")
+            @RequestParam(defaultValue = "10") int minDiscountPercentage) {
+
+        log.info("Generating discount report with min {}% discount and sending to Telegram", minDiscountPercentage);
+
+        Map<String, PriceAnalysisService.StoreDiscountGroup> discounts =
+                priceAnalysisService.getDiscountReportGroupedByStore(minDiscountPercentage);
+
+        int totalItems = discounts.values().stream().mapToInt(PriceAnalysisService.StoreDiscountGroup::itemCount).sum();
+        int storeCount = discounts.size();
+        int subscribersSent = telegramNotificationService.sendDiscountReport(discounts);
+
+        log.info("Discount report sent: {} items from {} stores to {} subscribers",
+                totalItems, storeCount, subscribersSent);
+
+        return ResponseEntity.ok(new DiscountReportResponse(
+                true,
+                String.format("Report sent to %d subscribers", subscribersSent),
+                totalItems,
+                storeCount,
+                subscribersSent
+        ));
+    }
+
+    public record DiscountReportResponse(
+            boolean success,
+            String message,
+            int totalItems,
+            int storeCount,
+            int subscribersSent
+    ) {}
 }

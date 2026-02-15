@@ -60,6 +60,33 @@ public class PriceAnalysisService {
             LocalDateTime timestamp
     ) {}
 
+    public record DiscountedItem(
+            Product product,
+            Store store,
+            BigDecimal regularPrice,
+            BigDecimal salePrice,
+            BigDecimal discountAmount,
+            double discountPercentage,
+            String promoDescription,
+            LocalDateTime scrapedAt
+    ) {}
+
+    public record DiscountedItemDetail(
+            Product product,
+            BigDecimal regularPrice,
+            BigDecimal salePrice,
+            BigDecimal discountAmount,
+            double discountPercentage,
+            String promoDescription,
+            LocalDateTime scrapedAt
+    ) {}
+
+    public record StoreDiscountGroup(
+            Store store,
+            int itemCount,
+            List<DiscountedItemDetail> items
+    ) {}
+
     public List<PriceDrop> detectPriceDrops(String storeId, List<PriceRecord> previousPrices) {
         List<PriceDrop> drops = new ArrayList<>();
 
@@ -250,5 +277,146 @@ public class PriceAnalysisService {
         return record.getRegularPrice().subtract(record.getSalePrice())
                 .divide(record.getRegularPrice(), 4, RoundingMode.HALF_UP)
                 .multiply(BigDecimal.valueOf(100));
+    }
+
+    public Map<String, List<DiscountedItem>> getAllDiscountedItemsGroupedByStore(int minDiscountPercentage) {
+        LocalDateTime oneDayAgo = LocalDateTime.now().minusDays(1);
+        List<Store> stores = storeRepository.findByActiveTrue();
+        Map<String, Store> storeMap = stores.stream()
+                .collect(Collectors.toMap(Store::getId, s -> s));
+
+        // Get all recent sales
+        List<PriceRecord> allSales = priceRecordRepository.findByScrapedAtAfter(oneDayAgo)
+                .stream()
+                .filter(PriceRecord::isOnSale)
+                .filter(r -> r.getRegularPrice() != null && r.getSalePrice() != null)
+                .collect(Collectors.toList());
+
+        // Group by productId+storeId to get unique latest records
+        Map<String, PriceRecord> latestRecords = new HashMap<>();
+        for (PriceRecord record : allSales) {
+            String key = record.getProductId() + "_" + record.getStoreId();
+            PriceRecord existing = latestRecords.get(key);
+            if (existing == null || record.getScrapedAt().isAfter(existing.getScrapedAt())) {
+                latestRecords.put(key, record);
+            }
+        }
+
+        // Convert to DiscountedItem and group by store
+        Map<String, List<DiscountedItem>> result = new LinkedHashMap<>();
+
+        for (PriceRecord record : latestRecords.values()) {
+            BigDecimal discountPct = calculateDiscountPercentage(record);
+            if (discountPct.doubleValue() < minDiscountPercentage) {
+                continue;
+            }
+
+            Product product = productRepository.findById(record.getProductId()).orElse(null);
+            Store store = storeMap.get(record.getStoreId());
+
+            if (product == null || store == null) {
+                continue;
+            }
+
+            BigDecimal discountAmount = record.getRegularPrice().subtract(record.getSalePrice());
+
+            DiscountedItem item = new DiscountedItem(
+                    product,
+                    store,
+                    record.getRegularPrice(),
+                    record.getSalePrice(),
+                    discountAmount,
+                    discountPct.doubleValue(),
+                    record.getPromoDescription(),
+                    record.getScrapedAt()
+            );
+
+            result.computeIfAbsent(store.getName(), k -> new ArrayList<>()).add(item);
+        }
+
+        // Sort items within each store by discount percentage descending
+        for (List<DiscountedItem> items : result.values()) {
+            items.sort((a, b) -> Double.compare(b.discountPercentage(), a.discountPercentage()));
+        }
+
+        return result;
+    }
+
+    public List<DiscountedItem> getAllDiscountedItems(int minDiscountPercentage, int limit) {
+        Map<String, List<DiscountedItem>> grouped = getAllDiscountedItemsGroupedByStore(minDiscountPercentage);
+
+        return grouped.values().stream()
+                .flatMap(List::stream)
+                .sorted((a, b) -> Double.compare(b.discountPercentage(), a.discountPercentage()))
+                .limit(limit)
+                .collect(Collectors.toList());
+    }
+
+    public Map<String, StoreDiscountGroup> getDiscountReportGroupedByStore(int minDiscountPercentage) {
+        LocalDateTime oneDayAgo = LocalDateTime.now().minusDays(1);
+        List<Store> stores = storeRepository.findByActiveTrue();
+        Map<String, Store> storeMap = stores.stream()
+                .collect(Collectors.toMap(Store::getId, s -> s));
+
+        // Get all recent sales
+        List<PriceRecord> allSales = priceRecordRepository.findByScrapedAtAfter(oneDayAgo)
+                .stream()
+                .filter(PriceRecord::isOnSale)
+                .filter(r -> r.getRegularPrice() != null && r.getSalePrice() != null)
+                .collect(Collectors.toList());
+
+        // Group by productId+storeId to get unique latest records
+        Map<String, PriceRecord> latestRecords = new HashMap<>();
+        for (PriceRecord record : allSales) {
+            String key = record.getProductId() + "_" + record.getStoreId();
+            PriceRecord existing = latestRecords.get(key);
+            if (existing == null || record.getScrapedAt().isAfter(existing.getScrapedAt())) {
+                latestRecords.put(key, record);
+            }
+        }
+
+        // Group by store
+        Map<String, List<PriceRecord>> recordsByStore = new HashMap<>();
+        for (PriceRecord record : latestRecords.values()) {
+            BigDecimal discountPct = calculateDiscountPercentage(record);
+            if (discountPct.doubleValue() < minDiscountPercentage) {
+                continue;
+            }
+            recordsByStore.computeIfAbsent(record.getStoreId(), k -> new ArrayList<>()).add(record);
+        }
+
+        // Build result
+        Map<String, StoreDiscountGroup> result = new LinkedHashMap<>();
+
+        for (Map.Entry<String, List<PriceRecord>> entry : recordsByStore.entrySet()) {
+            Store store = storeMap.get(entry.getKey());
+            if (store == null) continue;
+
+            List<DiscountedItemDetail> items = new ArrayList<>();
+            for (PriceRecord record : entry.getValue()) {
+                Product product = productRepository.findById(record.getProductId()).orElse(null);
+                if (product == null) continue;
+
+                BigDecimal discountPct = calculateDiscountPercentage(record);
+                BigDecimal discountAmount = record.getRegularPrice().subtract(record.getSalePrice());
+
+                items.add(new DiscountedItemDetail(
+                        product,
+                        record.getRegularPrice(),
+                        record.getSalePrice(),
+                        discountAmount,
+                        discountPct.doubleValue(),
+                        record.getPromoDescription(),
+                        record.getScrapedAt()
+                ));
+            }
+
+            // Sort by discount percentage descending
+            items.sort((a, b) -> Double.compare(b.discountPercentage(), a.discountPercentage()));
+
+            result.put(store.getName(), new StoreDiscountGroup(store, items.size(), items));
+        }
+
+        return result;
     }
 }

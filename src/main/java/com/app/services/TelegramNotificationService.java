@@ -13,6 +13,7 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -271,5 +272,111 @@ public class TelegramNotificationService extends TelegramLongPollingBot {
         }
 
         return subscriptionRepository.save(subscription);
+    }
+
+    public int sendDiscountReport(Map<String, PriceAnalysisService.StoreDiscountGroup> discountsByStore) {
+        if (!notificationEnabled) {
+            log.info("Telegram notifications are disabled");
+            return 0;
+        }
+
+        List<TelegramSubscription> activeSubscriptions = subscriptionRepository.findByActiveTrue();
+        if (activeSubscriptions.isEmpty()) {
+            log.info("No active Telegram subscriptions found");
+            return 0;
+        }
+
+        String message = formatDiscountReport(discountsByStore);
+        if (message.isEmpty()) {
+            log.info("No discounted items to report");
+            return 0;
+        }
+
+        int sentCount = 0;
+        for (TelegramSubscription subscription : activeSubscriptions) {
+            try {
+                // Split message if too long (Telegram limit is 4096 characters)
+                if (message.length() > 4000) {
+                    List<String> chunks = splitMessage(message, 4000);
+                    for (String chunk : chunks) {
+                        sendMessage(subscription.getChatId(), chunk);
+                    }
+                } else {
+                    sendMessage(subscription.getChatId(), message);
+                }
+                sentCount++;
+            } catch (Exception e) {
+                log.error("Failed to send discount report to chat {}", subscription.getChatId(), e);
+            }
+        }
+
+        return sentCount;
+    }
+
+    private String formatDiscountReport(Map<String, PriceAnalysisService.StoreDiscountGroup> discountsByStore) {
+        if (discountsByStore.isEmpty()) {
+            return "";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("<b>🏷️ Discount Report</b>\n");
+        sb.append("━━━━━━━━━━━━━━━━━━━━\n\n");
+
+        for (Map.Entry<String, PriceAnalysisService.StoreDiscountGroup> entry : discountsByStore.entrySet()) {
+            String storeName = entry.getKey();
+            PriceAnalysisService.StoreDiscountGroup group = entry.getValue();
+            List<PriceAnalysisService.DiscountedItemDetail> items = group.items();
+
+            sb.append(String.format("<b>🏪 %s</b> (%d items)\n", storeName, group.itemCount()));
+            sb.append("──────────────────\n");
+
+            // Limit to top 10 items per store
+            int count = 0;
+            for (PriceAnalysisService.DiscountedItemDetail item : items) {
+                if (count >= 10) {
+                    sb.append(String.format("   ... and %d more items\n", items.size() - 10));
+                    break;
+                }
+
+                sb.append(String.format("• %s\n", truncate(item.product().getName(), 40)));
+                sb.append(String.format("   <s>$%s</s> → <b>$%s</b> (-%,.0f%%)\n",
+                        item.regularPrice().setScale(2, RoundingMode.HALF_UP),
+                        item.salePrice().setScale(2, RoundingMode.HALF_UP),
+                        item.discountPercentage()));
+
+                if (item.promoDescription() != null && !item.promoDescription().isEmpty()) {
+                    sb.append(String.format("   📢 %s\n", truncate(item.promoDescription(), 30)));
+                }
+                sb.append("\n");
+                count++;
+            }
+            sb.append("\n");
+        }
+
+        return sb.toString();
+    }
+
+    private String truncate(String text, int maxLength) {
+        if (text == null) return "";
+        if (text.length() <= maxLength) return text;
+        return text.substring(0, maxLength - 3) + "...";
+    }
+
+    private List<String> splitMessage(String message, int maxLength) {
+        List<String> chunks = new java.util.ArrayList<>();
+        int start = 0;
+        while (start < message.length()) {
+            int end = Math.min(start + maxLength, message.length());
+            // Try to break at a newline if possible
+            if (end < message.length()) {
+                int lastNewline = message.lastIndexOf('\n', end);
+                if (lastNewline > start) {
+                    end = lastNewline + 1;
+                }
+            }
+            chunks.add(message.substring(start, end));
+            start = end;
+        }
+        return chunks;
     }
 }

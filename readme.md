@@ -100,3 +100,49 @@ products._id    →  price_records.productId
 - Verified working with Playwright browser automation
 - Scrapes products from configured category URLs
 
+## Fourth Iteration
+
+### Walmart Scraper Overhaul
+- Rewrote URL structure to use Walmart Canada's new `/en/browse/` format with 13-digit category IDs
+- Added 45+ granular category URLs covering:
+  - Fruits & Vegetables (Fresh Fruits, Fresh Vegetables)
+  - Meat & Seafood (Chicken & Turkey, Beef, Pork, Fish & Seafood)
+  - Dairy & Eggs (Milk, Yogurt, Butter & Margarine, Eggs)
+  - Frozen (Meals & Sides, Vegetables)
+  - Pantry (Cereal & Breakfast, Canned Food)
+  - Bakery (Sliced Bread)
+- Added `CATEGORY_NAMES` static map — maps 13-digit Walmart category IDs to human-readable names
+- Added `CATEGORY_ID_PATTERN` regex to extract category ID from URL path
+- Improved price parsing with dedicated patterns:
+  - `WAS_PRICE_PATTERN` — detects "Was $X.XX" strikethrough prices
+  - `NOW_PRICE_PATTERN` — detects "Now $X.XX" sale prices
+  - `CENTS_PRICE_PATTERN` — handles cent-format prices (e.g., "97¢") and converts to dollar value
+- Added randomized request delays (`ThreadLocalRandom`) to avoid rate limiting
+- Enhanced `__NEXT_DATA__` JSON extraction with deeper nested product parsing
+- Added `parseProductFromHtml()` with improved CSS selectors for product cards
+- Handles both `$X.XX` and `XX¢` price display formats
+
+### Discount Report API
+- New DTOs in `PriceAnalysisService`:
+  - `DiscountedItem` — full discount info with product, store, prices, and promo description
+  - `DiscountedItemDetail` — discount info without store (used within store groups)
+  - `StoreDiscountGroup` — groups items by store with item count
+- New service methods:
+  - `getAllDiscountedItemsGroupedByStore()` — fetches on-sale items from last 24hrs, filters by min discount %, groups by store
+  - `getAllDiscountedItems()` — flat list sorted by discount %, with limit
+  - `getDiscountReportGroupedByStore()` — optimized grouping for report generation
+- New endpoints in `ReportController`:
+  - `GET /api/reports/discounts` — returns all discounted items grouped by store
+  - `POST /api/reports/discounts/telegram` — generates report and sends to all active Telegram subscribers
+- Parameters:
+  - `minDiscountPercentage` (default: 10) — minimum discount % to include
+- Response DTO: `DiscountReportResponse` (success, message, totalItems, storeCount, subscribersSent)
+
+### Telegram Discount Report
+- Added `sendDiscountReport()` to `TelegramNotificationService`
+- HTML-formatted message with store headers, item details, and discount percentages
+- Shows top 10 items per store with "... and X more items" overflow
+- Strikethrough original price with bold sale price (e.g., ~~$5.99~~ → **$3.99** (-33%))
+- Includes promo descriptions when available
+- Auto-splits messages exceeding Telegram's 4096 character limit (breaks at newlines)
+
