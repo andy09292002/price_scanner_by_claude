@@ -71,7 +71,9 @@ class UserControllerTest {
         when(userRepository.findById("nonexistent")).thenReturn(Optional.empty());
 
         mockMvc.perform(get("/api/users/nonexistent"))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.message").value("User not found with id: nonexistent"));
 
         verify(userRepository, times(1)).findById("nonexistent");
     }
@@ -136,7 +138,9 @@ class UserControllerTest {
         mockMvc.perform(put("/api/users/nonexistent")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(testUser)))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.message").value("User not found with id: nonexistent"));
 
         verify(userRepository, never()).save(any(User.class));
     }
@@ -156,7 +160,9 @@ class UserControllerTest {
         when(userRepository.existsById("nonexistent")).thenReturn(false);
 
         mockMvc.perform(delete("/api/users/nonexistent"))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.message").value("User not found with id: nonexistent"));
 
         verify(userRepository, never()).deleteById(any());
     }

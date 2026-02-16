@@ -1,5 +1,6 @@
 package com.app.controllers;
 
+import com.app.exceptions.ResourceNotFoundException;
 import com.app.models.User;
 import com.app.models.UserRepository;
 import io.swagger.v3.oas.annotations.Operation;
@@ -34,9 +35,9 @@ public class UserController {
     @Operation(summary = "Get user by ID")
     public ResponseEntity<User> getUserById(@PathVariable String id) {
         log.debug("Fetching user with id: {}", id);
-        return userRepository.findById(id)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
+        return ResponseEntity.ok(user);
     }
 
     @PostMapping
@@ -61,15 +62,13 @@ public class UserController {
     public ResponseEntity<User> updateUser(@PathVariable String id, @Valid @RequestBody User user) {
         log.debug("Updating user with id: {}", id);
 
-        return userRepository.findById(id)
-                .map(existingUser -> {
-                    existingUser.setUsername(user.getUsername());
-                    existingUser.setEmail(user.getEmail());
-                    existingUser.setActive(user.isActive());
-                    User updatedUser = userRepository.save(existingUser);
-                    return ResponseEntity.ok(updatedUser);
-                })
-                .orElse(ResponseEntity.notFound().build());
+        User existingUser = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
+        existingUser.setUsername(user.getUsername());
+        existingUser.setEmail(user.getEmail());
+        existingUser.setActive(user.isActive());
+        User updatedUser = userRepository.save(existingUser);
+        return ResponseEntity.ok(updatedUser);
     }
 
     @DeleteMapping("/{id}")
@@ -78,7 +77,7 @@ public class UserController {
         log.debug("Deleting user with id: {}", id);
 
         if (!userRepository.existsById(id)) {
-            return ResponseEntity.notFound().build();
+            throw new ResourceNotFoundException("User not found with id: " + id);
         }
 
         userRepository.deleteById(id);

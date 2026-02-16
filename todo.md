@@ -20,19 +20,21 @@
 
 **Why:** All endpoints are completely public with zero authentication. Anyone can trigger scrapes, delete users, or send Telegram messages.
 
-### 2. Implement Global Exception Handler
-- [ ] Create `@ControllerAdvice` class (`GlobalExceptionHandler`)
-- [ ] Define standard error response DTO (`ErrorResponse` with timestamp, status, message, path)
-- [ ] Handle common exceptions:
+### ~~2. Implement Global Exception Handler~~ ✅
+- [x] Create `@ControllerAdvice` class (`GlobalExceptionHandler`)
+- [x] Define standard error response DTO (`ErrorResponse` with timestamp, status, message, path)
+- [x] Handle common exceptions:
   - `ResourceNotFoundException` (404)
   - `MethodArgumentNotValidException` (400)
   - `IllegalArgumentException` (400)
   - `HttpRequestMethodNotSupportedException` (405)
+  - `MissingServletRequestParameterException` (400)
   - Generic `Exception` fallback (500)
-- [ ] Ensure consistent JSON error format across all endpoints
-- [ ] Log exceptions properly with stack traces at appropriate levels
+- [x] Ensure consistent JSON error format across all endpoints
+- [x] Log exceptions properly with stack traces at appropriate levels
+- [x] Refactor controllers to throw `ResourceNotFoundException` instead of empty 404 responses
 
-**Why:** No centralized error handling exists. Controllers return inconsistent error responses or raw Spring error pages.
+**Status:** Completed. All error responses now return consistent JSON with `ErrorResponse` structure.
 
 ### 3. Add Input Validation
 - [ ] Add Bean Validation annotations to `User` model (`@NotBlank`, `@Email`, `@Size`)
@@ -94,17 +96,31 @@ Current coverage: ~30%. Target: 80% per CLAUDE.md.
 
 **Why:** Currently returns a hardcoded string: `"Fetching current deals...\n\nVisit /api/reports/price-drops for the latest deals."` — no actual data is fetched.
 
-### 7. Fix PriceSmart Data Not Showing in Discount API
-- [ ] Investigate why PriceSmart scraped data does not appear in `/api/reports/sales` (discount API)
-- [ ] Check if PriceSmart price records are being stored correctly with proper `scrapedAt` timestamps
-- [ ] Verify PriceSmart products have correct store association and category mappings
-- [ ] Ensure discount calculation logic in `PriceAnalysisService` is compatible with PriceSmart data format
-- [ ] Confirm PriceSmart products have multiple price records (needed for price drop detection)
-- [ ] Add integration test to verify PriceSmart data flows through to discount API
+### ~~7. Fix PriceSmart Data Not Showing in Discount API~~ ✅
+- [x] Investigate why PriceSmart scraped data does not appear in `/api/reports/sales` (discount API)
+- [x] Check if PriceSmart price records are being stored correctly with proper `scrapedAt` timestamps
+- [x] Verify PriceSmart products have correct store association and category mappings
+- [x] Ensure discount calculation logic in `PriceAnalysisService` is compatible with PriceSmart data format
+- [x] Confirm PriceSmart products have multiple price records (needed for price drop detection)
+- [x] Add integration test to verify PriceSmart data flows through to discount API
 
-**Why:** PriceSmart data is being scraped but does not appear in the discount API results, breaking a core feature for PriceSmart store coverage.
+**Status:** Completed. PriceSmart data now correctly appears in the discount API.
 
-### 8. Scraper Error Resilience
+### 8. Generate PDF Discount Report
+- [ ] Add PDF generation library dependency (e.g., iText or Apache PDFBox)
+- [ ] Create `ReportGenerationService` to build PDF from discount API data
+- [ ] Include product images in the report (fetch from stored image URLs)
+- [ ] Display calculated discount rate (percentage off) for each product
+- [ ] Show original price, sale price, and savings per product
+- [ ] Group products by store or category for readability
+- [ ] Add report header with generation date, filters applied, and summary stats
+- [ ] Create `GET /api/reports/sales/pdf` endpoint to download the PDF report
+- [ ] Support query parameters (store filter, category filter, minimum discount %)
+- [ ] Handle missing product images gracefully (placeholder or skip)
+
+**Why:** Provides a visual, shareable PDF report of current discounts with product images and calculated savings, making deal information easy to distribute and review offline.
+
+### 9. Scraper Error Resilience
 - [ ] Add retry logic with exponential backoff for HTTP failures (network timeouts, 5xx responses)
 - [ ] Add circuit breaker pattern per store (Resilience4j `@CircuitBreaker`)
 - [ ] Handle store website structure changes gracefully (log warnings, don't crash)
@@ -116,7 +132,7 @@ Current coverage: ~30%. Target: 80% per CLAUDE.md.
 
 ## P2 - Medium Priority
 
-### 8. Docker & Containerization
+### 10. Docker & Containerization
 - [ ] Create `Dockerfile` (multi-stage build: Maven build + JRE runtime)
 - [ ] Create `docker-compose.yml` with services:
   - Application (Spring Boot)
@@ -126,7 +142,7 @@ Current coverage: ~30%. Target: 80% per CLAUDE.md.
 - [ ] Document environment variable configuration for Docker
 - [ ] Ensure Playwright works in container (install browser dependencies)
 
-### 9. CI/CD Pipeline
+### 11. CI/CD Pipeline
 - [ ] Create `.github/workflows/ci.yml`:
   - Run on push/PR to main
   - Build with Maven
@@ -136,7 +152,7 @@ Current coverage: ~30%. Target: 80% per CLAUDE.md.
 - [ ] (Optional) Add deployment workflow for staging/production
 - [ ] Add badge to readme.md for build status
 
-### 10. Health Check & Monitoring
+### 12. Health Check & Monitoring
 - [ ] Add `spring-boot-starter-actuator` dependency
 - [ ] Expose `/actuator/health` endpoint
 - [ ] Add custom health indicators:
@@ -148,7 +164,7 @@ Current coverage: ~30%. Target: 80% per CLAUDE.md.
   - API request latency
   - Product count per store
 
-### 11. API Caching
+### 13. API Caching
 - [ ] Add caching for frequently accessed endpoints:
   - `GET /api/products` (search results)
   - `GET /api/products/categories` (category list)
@@ -157,7 +173,7 @@ Current coverage: ~30%. Target: 80% per CLAUDE.md.
 - [ ] Invalidate cache after scrape job completion
 - [ ] Consider Redis as cache backend for multi-instance deployments
 
-### 12. Configuration Validation
+### 14. Configuration Validation
 - [ ] Validate required environment variables on startup (fail fast if missing):
   - `MONGODB_URI`
   - `TELEGRAM_BOT_TOKEN`
@@ -167,13 +183,13 @@ Current coverage: ~30%. Target: 80% per CLAUDE.md.
 - [ ] Add `.env.example` file documenting all required variables
 - [ ] Ensure `.env` is in `.gitignore`
 
-### 13. Product Deduplication
+### 15. Product Deduplication
 - [ ] Improve product name normalization (handle brand variations, size formats)
 - [ ] Add deduplication job to merge duplicate products
 - [ ] Handle cross-store product matching more accurately
 - [ ] Add admin endpoint to manually merge/split products
 
-### 14. Historical Data Management
+### 16. Historical Data Management
 - [ ] Add TTL index on `price_records.scrapedAt` for automatic pruning (e.g., keep 90 days)
 - [ ] Create aggregated historical data (weekly/monthly averages) before pruning detailed records
 - [ ] Add endpoint for price trend analysis (7-day, 30-day, 90-day)
@@ -182,21 +198,21 @@ Current coverage: ~30%. Target: 80% per CLAUDE.md.
 
 ## P3 - Nice to Have
 
-### 15. API Enhancements
+### 17. API Enhancements
 - [ ] Add advanced search filters (price range, on-sale only, specific stores)
 - [ ] Add user watchlist feature (track specific products, get alerts)
 - [ ] Add bulk product query endpoint
 - [ ] Add category hierarchy/tree endpoint
 - [ ] Add pagination metadata (total count, total pages) to all list endpoints
 
-### 16. Telegram Bot Enhancements
+### 18. Telegram Bot Enhancements
 - [ ] Add `/watchlist` command to manage product watchlist
 - [ ] Add `/compare` command to compare prices across stores
 - [ ] Add inline keyboard for settings (store/category toggles)
 - [ ] Add message scheduling (daily/weekly deal summaries)
 - [ ] Add timezone support for scheduled messages
 
-### 17. Frontend / Dashboard
+### 19. Frontend / Dashboard
 - [ ] Build a web dashboard (JSP or separate SPA)
 - [ ] Product search and browse UI
 - [ ] Price comparison charts
@@ -204,20 +220,20 @@ Current coverage: ~30%. Target: 80% per CLAUDE.md.
 - [ ] Store-by-store deal listings
 - [ ] Admin panel for scrape management
 
-### 18. Performance Optimization
+### 20. Performance Optimization
 - [ ] Replace `new Thread()` in `ScrapeOrchestrationService` with `ExecutorService` thread pool
 - [ ] Add MongoDB indexes for common queries (product search, price lookups)
 - [ ] Implement batch inserts for price records during scraping
 - [ ] Add connection pooling configuration for HTTP clients
 - [ ] Profile and optimize slow scraper operations
 
-### 19. Logging & Observability
+### 21. Logging & Observability
 - [ ] Standardize log format across all services
 - [ ] Add correlation IDs for scrape jobs (trace through orchestration > scraper > matching > storage)
 - [ ] Add structured logging (JSON format for log aggregation)
 - [ ] Add audit logging for admin actions (trigger scrape, delete user)
 
-### 20. Documentation
+### 22. Documentation
 - [ ] Generate comprehensive API documentation with Swagger annotations (`@Operation`, `@ApiResponse`)
 - [ ] Add request/response examples to Swagger
 - [ ] Write deployment guide (manual + Docker)
@@ -245,3 +261,5 @@ Current coverage: ~30%. Target: 80% per CLAUDE.md.
 - [x] Swagger/OpenAPI setup
 - [x] MongoDB integration
 - [x] Basic unit tests (6 test classes)
+- [x] Fix PriceSmart data not showing in discount API
+- [x] Global exception handler with consistent JSON error responses

@@ -11,6 +11,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
+import com.app.exceptions.ResourceNotFoundException;
+
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
@@ -124,9 +126,8 @@ class ScrapeControllerTest {
     void getJobStatus_NotFound() {
         when(scrapeOrchestrationService.getJob("nonexistent")).thenReturn(Optional.empty());
 
-        ResponseEntity<ScrapeJob> response = scrapeController.getJobStatus("nonexistent");
-
-        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+        assertThrows(ResourceNotFoundException.class,
+                () -> scrapeController.getJobStatus("nonexistent"));
     }
 
     @Test
@@ -145,9 +146,8 @@ class ScrapeControllerTest {
     void getLatestJob_NotFound() {
         when(scrapeOrchestrationService.getLatestJob("UNKNOWN")).thenReturn(Optional.empty());
 
-        ResponseEntity<ScrapeJob> response = scrapeController.getLatestJob("UNKNOWN");
-
-        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+        assertThrows(ResourceNotFoundException.class,
+                () -> scrapeController.getLatestJob("UNKNOWN"));
     }
 
     @Test

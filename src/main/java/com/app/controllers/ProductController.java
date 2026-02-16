@@ -1,5 +1,6 @@
 package com.app.controllers;
 
+import com.app.exceptions.ResourceNotFoundException;
 import com.app.models.Category;
 import com.app.models.CategoryRepository;
 import com.app.models.Product;
@@ -72,9 +73,9 @@ public class ProductController {
             @PathVariable String id) {
 
         log.debug("Getting product: {}", id);
-        return productRepository.findById(id)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + id));
+        return ResponseEntity.ok(product);
     }
 
     @GetMapping("/categories")
@@ -94,9 +95,9 @@ public class ProductController {
             @PathVariable String categoryId) {
 
         log.debug("Getting category: {}", categoryId);
-        return categoryRepository.findById(categoryId)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+        Category category = categoryRepository.findById(categoryId)
+                .orElseThrow(() -> new ResourceNotFoundException("Category not found with id: " + categoryId));
+        return ResponseEntity.ok(category);
     }
 
     @GetMapping("/categories/{categoryId}/products")

@@ -1,5 +1,6 @@
 package com.app.controllers;
 
+import com.app.exceptions.ResourceNotFoundException;
 import com.app.models.ScrapeJob;
 import com.app.services.ScrapeOrchestrationService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -49,9 +50,9 @@ public class ScrapeController {
             @Parameter(description = "Job ID")
             @PathVariable String jobId) {
 
-        return scrapeOrchestrationService.getJob(jobId)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+        ScrapeJob job = scrapeOrchestrationService.getJob(jobId)
+                .orElseThrow(() -> new ResourceNotFoundException("Scrape job not found with id: " + jobId));
+        return ResponseEntity.ok(job);
     }
 
     @GetMapping("/jobs/latest/{storeCode}")
@@ -61,8 +62,8 @@ public class ScrapeController {
             @Parameter(description = "Store code")
             @PathVariable String storeCode) {
 
-        return scrapeOrchestrationService.getLatestJob(storeCode.toUpperCase())
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+        ScrapeJob job = scrapeOrchestrationService.getLatestJob(storeCode.toUpperCase())
+                .orElseThrow(() -> new ResourceNotFoundException("No scrape job found for store: " + storeCode.toUpperCase()));
+        return ResponseEntity.ok(job);
     }
 }
