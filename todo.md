@@ -94,7 +94,17 @@ Current coverage: ~30%. Target: 80% per CLAUDE.md.
 
 **Why:** Currently returns a hardcoded string: `"Fetching current deals...\n\nVisit /api/reports/price-drops for the latest deals."` — no actual data is fetched.
 
-### 7. Scraper Error Resilience
+### 7. Fix PriceSmart Data Not Showing in Discount API
+- [ ] Investigate why PriceSmart scraped data does not appear in `/api/reports/sales` (discount API)
+- [ ] Check if PriceSmart price records are being stored correctly with proper `scrapedAt` timestamps
+- [ ] Verify PriceSmart products have correct store association and category mappings
+- [ ] Ensure discount calculation logic in `PriceAnalysisService` is compatible with PriceSmart data format
+- [ ] Confirm PriceSmart products have multiple price records (needed for price drop detection)
+- [ ] Add integration test to verify PriceSmart data flows through to discount API
+
+**Why:** PriceSmart data is being scraped but does not appear in the discount API results, breaking a core feature for PriceSmart store coverage.
+
+### 8. Scraper Error Resilience
 - [ ] Add retry logic with exponential backoff for HTTP failures (network timeouts, 5xx responses)
 - [ ] Add circuit breaker pattern per store (Resilience4j `@CircuitBreaker`)
 - [ ] Handle store website structure changes gracefully (log warnings, don't crash)
