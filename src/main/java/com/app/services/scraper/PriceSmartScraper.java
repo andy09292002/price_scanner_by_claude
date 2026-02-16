@@ -357,9 +357,79 @@ public class PriceSmartScraper extends AbstractStoreScraper {
         String size = extractSize(fullName);
         String unit = extractUnit(fullName);
 
-        // Check for sale price (look for strikethrough or was price)
-        Element saleBadge = element.selectFirst("[class*=ProductCardBadges]");
-        boolean onSale = saleBadge != null && saleBadge.text().toLowerCase().contains("sale");
+        // Check for sale/promo badges and extract savings
+        BigDecimal salePrice = null;
+        boolean onSale = false;
+        String promoDescription = null;
+
+        // Look for promotion badges (e.g., "SAVE $2.00", "2 FOR $5.00")
+        Elements badgeElements = element.select("[class*=Badge], [class*=PromotionBadge]");
+        for (Element badge : badgeElements) {
+            String badgeText = badge.text().trim();
+            if (badgeText.isEmpty()) continue;
+
+            promoDescription = badgeText;
+
+            // Try to extract savings amount from badge text (e.g., "SAVE $2.00", "Save $1.50")
+            Matcher saveMatcher = Pattern.compile("(?i)save\\s*\\$?([\\d]+\\.?\\d*)").matcher(badgeText);
+            if (saveMatcher.find() && regularPrice != null) {
+                BigDecimal savings = parsePrice(saveMatcher.group(1));
+                if (savings != null && savings.compareTo(BigDecimal.ZERO) > 0) {
+                    // Displayed price is the sale price; original is displayed + savings
+                    salePrice = regularPrice;
+                    regularPrice = regularPrice.add(savings);
+                    onSale = true;
+                }
+            }
+
+            // Try percentage off (e.g., "20% OFF")
+            if (!onSale) {
+                Matcher pctMatcher = Pattern.compile("(\\d+)\\s*%\\s*(?i)off").matcher(badgeText);
+                if (pctMatcher.find() && regularPrice != null) {
+                    // Badge says X% off, but displayed price is already the sale price
+                    int pctOff = Integer.parseInt(pctMatcher.group(1));
+                    if (pctOff > 0 && pctOff < 100) {
+                        // originalPrice * (1 - pct/100) = displayedPrice => originalPrice = displayedPrice / (1 - pct/100)
+                        BigDecimal originalPrice = regularPrice.multiply(new BigDecimal(100))
+                                .divide(new BigDecimal(100 - pctOff), 2, java.math.RoundingMode.HALF_UP);
+                        salePrice = regularPrice;
+                        regularPrice = originalPrice;
+                        onSale = true;
+                    }
+                }
+            }
+
+            if (onSale) break;
+        }
+
+        // Also check for "View Deal" indicator as a sale signal
+        if (!onSale) {
+            Element viewDeal = element.selectFirst("[class*=ViewDeal]");
+            if (viewDeal != null) {
+                onSale = true;
+                if (promoDescription == null) {
+                    promoDescription = viewDeal.text().trim();
+                }
+            }
+        }
+
+        // Look for a separate was/original price element (strikethrough price)
+        if (!onSale || salePrice == null) {
+            Elements allPriceElements = element.select("[class*=ProductCardPrice]");
+            if (allPriceElements.size() > 1 && regularPrice != null) {
+                // Multiple price elements likely means was-price + current price
+                for (Element pe : allPriceElements) {
+                    BigDecimal otherPrice = parsePrice(pe.text().trim());
+                    if (otherPrice != null && otherPrice.compareTo(regularPrice) > 0) {
+                        // Found a higher price - this is the original/was price
+                        salePrice = regularPrice;
+                        regularPrice = otherPrice;
+                        onSale = true;
+                        break;
+                    }
+                }
+            }
+        }
 
         // Check stock status
         boolean inStock = element.selectFirst("[class*=outOfStock], [class*=OutOfStock]") == null;
@@ -376,10 +446,10 @@ public class PriceSmartScraper extends AbstractStoreScraper {
                 category,
                 imageUrl,
                 regularPrice,
-                regularPrice, // Use same price if no sale
+                onSale && salePrice != null ? salePrice : regularPrice,
                 unitPrice,
                 onSale,
-                null,
+                promoDescription,
                 inStock,
                 productUrl
         );
