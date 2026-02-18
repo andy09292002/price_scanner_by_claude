@@ -146,3 +146,20 @@ products._id    →  price_records.productId
 - Includes promo descriptions when available
 - Auto-splits messages exceeding Telegram's 4096 character limit (breaks at newlines)
 
+## Fifth Iteration
+
+### PDF Discount Report
+- Added Apache PDFBox 3.0.1 dependency for PDF generation
+- New `ReportGenerationService` builds downloadable PDF reports from discount data
+- New endpoint: `GET /api/reports/sales/pdf`
+  - Query parameters: `store`, `category`, `minDiscountPercentage` (default: 10)
+  - Returns `application/pdf` with `Content-Disposition: attachment` header
+- PDF report contents:
+  - **Header**: report title, generation date, applied filters, summary stats (total items, store count, total potential savings)
+  - **Store sections**: store name with item count, followed by product rows
+  - **Product rows**: thumbnail image (40x40pt), product name/brand/size, regular price, sale price, discount %, savings amount, promo description
+- Image handling: fetches product images via HTTP with 3s connect / 5s read timeouts; renders `[No Image]` placeholder on failure
+- Automatic page breaks when content overflows US Letter page
+- Category filtering via `CategoryRepository.findByNameIgnoreCase()`
+- Non-ASCII character sanitization for Helvetica font compatibility
+- Unit tests: 8 service tests + 3 controller tests covering happy path, empty data, filters, null images, and multi-page generation

@@ -8,22 +8,31 @@ import com.app.models.ProductRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Set;
 
 @Slf4j
 @RestController
 @RequestMapping("/api/products")
 @RequiredArgsConstructor
+@Validated
 @Tag(name = "Products", description = "Endpoints for searching and viewing products")
 public class ProductController {
+
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
+            "name", "brand", "normalizedName", "categoryId", "createdAt", "updatedAt");
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
@@ -37,9 +46,9 @@ public class ProductController {
             @Parameter(description = "Category ID to filter by")
             @RequestParam(required = false) String categoryId,
             @Parameter(description = "Page number")
-            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "0") @Min(value = 0, message = "Page number must be at least 0") int page,
             @Parameter(description = "Page size")
-            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "20") @Min(value = 1, message = "Page size must be at least 1") @Max(value = 100, message = "Page size must be at most 100") int size,
             @Parameter(description = "Sort field")
             @RequestParam(defaultValue = "name") String sortBy,
             @Parameter(description = "Sort direction (asc/desc)")
@@ -47,6 +56,11 @@ public class ProductController {
 
         log.debug("Searching products: q={}, categoryId={}, page={}, size={}",
                 q, categoryId, page, size);
+
+        if (!ALLOWED_SORT_FIELDS.contains(sortBy)) {
+            throw new IllegalArgumentException("Invalid sort field: " + sortBy +
+                    ". Allowed fields: " + ALLOWED_SORT_FIELDS);
+        }
 
         Sort sort = sortDir.equalsIgnoreCase("desc")
                 ? Sort.by(sortBy).descending()
@@ -70,7 +84,7 @@ public class ProductController {
                description = "Returns detailed information about a specific product.")
     public ResponseEntity<Product> getProduct(
             @Parameter(description = "Product ID")
-            @PathVariable String id) {
+            @PathVariable @NotBlank(message = "Product ID must not be blank") String id) {
 
         log.debug("Getting product: {}", id);
         Product product = productRepository.findById(id)
@@ -92,7 +106,7 @@ public class ProductController {
                description = "Returns details of a specific category.")
     public ResponseEntity<Category> getCategory(
             @Parameter(description = "Category ID")
-            @PathVariable String categoryId) {
+            @PathVariable @NotBlank(message = "Category ID must not be blank") String categoryId) {
 
         log.debug("Getting category: {}", categoryId);
         Category category = categoryRepository.findById(categoryId)
@@ -105,7 +119,7 @@ public class ProductController {
                description = "Returns all products in a specific category.")
     public ResponseEntity<List<Product>> getProductsByCategory(
             @Parameter(description = "Category ID")
-            @PathVariable String categoryId) {
+            @PathVariable @NotBlank(message = "Category ID must not be blank") String categoryId) {
 
         log.debug("Getting products for category: {}", categoryId);
         List<Product> products = productRepository.findByCategoryId(categoryId);

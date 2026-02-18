@@ -36,15 +36,18 @@
 
 **Status:** Completed. All error responses now return consistent JSON with `ErrorResponse` structure.
 
-### 3. Add Input Validation
-- [ ] Add Bean Validation annotations to `User` model (`@NotBlank`, `@Email`, `@Size`)
-- [ ] Add validation to `TelegramSubscription` model (`@NotNull` on chatId, `@Min`/`@Max` on thresholds)
-- [ ] Add `@Valid` annotation on all `@RequestBody` parameters across controllers
-- [ ] Validate path variables and request parameters (`@Positive`, `@NotBlank`)
-- [ ] Add validation to `ProductController` search parameters (page size limits, sort field whitelist)
-- [ ] Add validation to `ReportController` parameters (minDiscountPercentage range)
+### ~~3. Add Input Validation~~ ✅
+- [x] Add Bean Validation annotations to `User` model (`@NotBlank`, `@Email`, `@Size`)
+- [x] Add validation to `TelegramSubscription` model (`@NotNull` on chatId, `@Min`/`@Max` on thresholds)
+- [x] Add `@Valid` annotation on all `@RequestBody` parameters across controllers
+- [x] Validate path variables and request parameters (`@NotBlank`, `@Min`/`@Max`)
+- [x] Add validation to `ProductController` search parameters (page size limits, sort field whitelist)
+- [x] Add validation to `ReportController` parameters (minDiscountPercentage range)
+- [x] Add `@Validated` to all controllers for parameter-level constraint validation
+- [x] Add `ConstraintViolationException` handler to `GlobalExceptionHandler`
+- [x] Add 8 new validation test cases to `UserControllerTest`
 
-**Why:** Only `UserController.createUser()` uses `@Valid`, and even the `User` model has no validation annotations. Invalid data can enter the system freely.
+**Status:** Completed. All models have Bean Validation annotations, all controllers use `@Validated` with parameter constraints, and the global exception handler returns consistent error responses for validation failures.
 
 ---
 
@@ -106,19 +109,19 @@ Current coverage: ~30%. Target: 80% per CLAUDE.md.
 
 **Status:** Completed. PriceSmart data now correctly appears in the discount API.
 
-### 8. Generate PDF Discount Report
-- [ ] Add PDF generation library dependency (e.g., iText or Apache PDFBox)
-- [ ] Create `ReportGenerationService` to build PDF from discount API data
-- [ ] Include product images in the report (fetch from stored image URLs)
-- [ ] Display calculated discount rate (percentage off) for each product
-- [ ] Show original price, sale price, and savings per product
-- [ ] Group products by store or category for readability
-- [ ] Add report header with generation date, filters applied, and summary stats
-- [ ] Create `GET /api/reports/sales/pdf` endpoint to download the PDF report
-- [ ] Support query parameters (store filter, category filter, minimum discount %)
-- [ ] Handle missing product images gracefully (placeholder or skip)
+### ~~8. Generate PDF Discount Report~~ ✅
+- [x] Add PDF generation library dependency (e.g., iText or Apache PDFBox)
+- [x] Create `ReportGenerationService` to build PDF from discount API data
+- [x] Include product images in the report (fetch from stored image URLs)
+- [x] Display calculated discount rate (percentage off) for each product
+- [x] Show original price, sale price, and savings per product
+- [x] Group products by store or category for readability
+- [x] Add report header with generation date, filters applied, and summary stats
+- [x] Create `GET /api/reports/sales/pdf` endpoint to download the PDF report
+- [x] Support query parameters (store filter, category filter, minimum discount %)
+- [x] Handle missing product images gracefully (placeholder or skip)
 
-**Why:** Provides a visual, shareable PDF report of current discounts with product images and calculated savings, making deal information easy to distribute and review offline.
+**Status:** Completed. PDF report generated using Apache PDFBox 3.0.1 with product images, pricing details, discount percentages, and summary stats. Endpoint: `GET /api/reports/sales/pdf?store=&category=&minDiscountPercentage=10`.
 
 ### 9. Scraper Error Resilience
 - [ ] Add retry logic with exponential backoff for HTTP failures (network timeouts, 5xx responses)

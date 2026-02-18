@@ -6,9 +6,11 @@ import com.app.services.ScrapeOrchestrationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -17,6 +19,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/scrape")
 @RequiredArgsConstructor
+@Validated
 @Tag(name = "Scrape", description = "Endpoints for triggering and monitoring price scraping jobs")
 public class ScrapeController {
 
@@ -27,7 +30,7 @@ public class ScrapeController {
                description = "Starts a scraping job for the specified store. Returns immediately with job info.")
     public ResponseEntity<ScrapeJob> triggerScrape(
                 @Parameter(description = "Store code (RCSS, WALMART, PRICESMART, TNT)")
-            @PathVariable String storeCode) {
+            @PathVariable @NotBlank(message = "Store code must not be blank") String storeCode) {
 
         log.info("Triggering scrape for store: {}", storeCode);
         ScrapeJob job = scrapeOrchestrationService.triggerScrape(storeCode.toUpperCase());
@@ -48,7 +51,7 @@ public class ScrapeController {
                description = "Returns the current status and details of a scrape job.")
     public ResponseEntity<ScrapeJob> getJobStatus(
             @Parameter(description = "Job ID")
-            @PathVariable String jobId) {
+            @PathVariable @NotBlank(message = "Job ID must not be blank") String jobId) {
 
         ScrapeJob job = scrapeOrchestrationService.getJob(jobId)
                 .orElseThrow(() -> new ResourceNotFoundException("Scrape job not found with id: " + jobId));
@@ -60,7 +63,7 @@ public class ScrapeController {
                description = "Returns the most recent scrape job for a store.")
     public ResponseEntity<ScrapeJob> getLatestJob(
             @Parameter(description = "Store code")
-            @PathVariable String storeCode) {
+            @PathVariable @NotBlank(message = "Store code must not be blank") String storeCode) {
 
         ScrapeJob job = scrapeOrchestrationService.getLatestJob(storeCode.toUpperCase())
                 .orElseThrow(() -> new ResourceNotFoundException("No scrape job found for store: " + storeCode.toUpperCase()));
