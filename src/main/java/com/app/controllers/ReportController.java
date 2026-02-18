@@ -2,17 +2,26 @@ package com.app.controllers;
 
 import com.app.models.PriceRecord;
 import com.app.services.PriceAnalysisService;
+import com.app.services.ReportGenerationService;
 import com.app.services.TelegramNotificationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -20,20 +29,22 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/reports")
 @RequiredArgsConstructor
+@Validated
 @Tag(name = "Reports", description = "Endpoints for price analysis and reports")
 public class ReportController {
 
     private final PriceAnalysisService priceAnalysisService;
     private final TelegramNotificationService telegramNotificationService;
+    private final ReportGenerationService reportGenerationService;
 
     @GetMapping("/price-drops")
     @Operation(summary = "Get items with biggest price reductions",
                description = "Returns products with the largest price drops in the last 24 hours.")
     public ResponseEntity<List<PriceAnalysisService.PriceDrop>> getPriceDrops(
             @Parameter(description = "Minimum drop percentage to include")
-            @RequestParam(defaultValue = "10") int minDropPercentage,
+            @RequestParam(defaultValue = "10") @Min(value = 0, message = "minDropPercentage must be at least 0") @Max(value = 100, message = "minDropPercentage must be at most 100") int minDropPercentage,
             @Parameter(description = "Maximum number of results")
-            @RequestParam(defaultValue = "50") int limit) {
+            @RequestParam(defaultValue = "50") @Min(value = 1, message = "Limit must be at least 1") @Max(value = 500, message = "Limit must be at most 500") int limit) {
 
         log.debug("Getting price drops with min {}% drop, limit {}", minDropPercentage, limit);
         List<PriceAnalysisService.PriceDrop> drops =
@@ -46,7 +57,7 @@ public class ReportController {
                description = "Returns current prices for a product at all tracked stores.")
     public ResponseEntity<PriceAnalysisService.PriceComparison> comparePrices(
             @Parameter(description = "Product ID")
-            @PathVariable String productId) {
+            @PathVariable @NotBlank(message = "Product ID must not be blank") String productId) {
 
         log.debug("Comparing prices for product: {}", productId);
         PriceAnalysisService.PriceComparison comparison =
@@ -59,11 +70,11 @@ public class ReportController {
                description = "Returns price history for a product at a specific store.")
     public ResponseEntity<PriceAnalysisService.PriceHistory> getPriceHistory(
             @Parameter(description = "Product ID")
-            @PathVariable String productId,
+            @PathVariable @NotBlank(message = "Product ID must not be blank") String productId,
             @Parameter(description = "Store ID")
-            @RequestParam String storeId,
+            @RequestParam @NotBlank(message = "Store ID is required") String storeId,
             @Parameter(description = "Number of days of history")
-            @RequestParam(defaultValue = "30") int days) {
+            @RequestParam(defaultValue = "30") @Min(value = 1, message = "Days must be at least 1") @Max(value = 365, message = "Days must be at most 365") int days) {
 
         log.debug("Getting price history for product {} at store {} for {} days",
                 productId, storeId, days);
@@ -77,9 +88,9 @@ public class ReportController {
                description = "Returns all products currently on sale.")
     public ResponseEntity<Page<PriceRecord>> getCurrentSales(
             @Parameter(description = "Page number")
-            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "0") @Min(value = 0, message = "Page number must be at least 0") int page,
             @Parameter(description = "Page size")
-            @RequestParam(defaultValue = "50") int size) {
+            @RequestParam(defaultValue = "50") @Min(value = 1, message = "Page size must be at least 1") @Max(value = 100, message = "Page size must be at most 100") int size) {
 
         log.debug("Getting current sales, page {} size {}", page, size);
         Page<PriceRecord> sales = priceAnalysisService.getCurrentSales(PageRequest.of(page, size));
@@ -91,9 +102,9 @@ public class ReportController {
                description = "Returns products currently on sale at a specific store.")
     public ResponseEntity<List<PriceRecord>> getCurrentSalesForStore(
             @Parameter(description = "Store code (RCSS, WALMART, PRICESMART, TNT)")
-            @PathVariable String storeCode,
+            @PathVariable @NotBlank(message = "Store code must not be blank") String storeCode,
             @Parameter(description = "Maximum number of results")
-            @RequestParam(defaultValue = "50") int limit) {
+            @RequestParam(defaultValue = "50") @Min(value = 1, message = "Limit must be at least 1") @Max(value = 500, message = "Limit must be at most 500") int limit) {
 
         log.debug("Getting current sales for store {}, limit {}", storeCode, limit);
         List<PriceRecord> sales =
@@ -106,7 +117,7 @@ public class ReportController {
                description = "Returns all products currently on discount, grouped by store. Store info appears once per group.")
     public ResponseEntity<Map<String, PriceAnalysisService.StoreDiscountGroup>> getDiscountedItems(
             @Parameter(description = "Minimum discount percentage to include")
-            @RequestParam(defaultValue = "10") int minDiscountPercentage) {
+            @RequestParam(defaultValue = "10") @Min(value = 0, message = "minDiscountPercentage must be at least 0") @Max(value = 100, message = "minDiscountPercentage must be at most 100") int minDiscountPercentage) {
 
         log.debug("Getting discounted items with min {}% discount", minDiscountPercentage);
         Map<String, PriceAnalysisService.StoreDiscountGroup> discounts =
@@ -114,12 +125,48 @@ public class ReportController {
         return ResponseEntity.ok(discounts);
     }
 
+    @GetMapping("/sales/pdf")
+    @Operation(summary = "Download discount report as PDF",
+               description = "Generates a PDF report of all discounted products with images, pricing details, and summary stats.")
+    public ResponseEntity<byte[]> downloadDiscountReportPdf(
+            @Parameter(description = "Filter by store code (e.g., WALMART, RCSS)")
+            @RequestParam(required = false) String store,
+            @Parameter(description = "Filter by category name (e.g., produce, dairy)")
+            @RequestParam(required = false) String category,
+            @Parameter(description = "Minimum discount percentage to include")
+            @RequestParam(defaultValue = "10") @Min(value = 0, message = "minDiscountPercentage must be at least 0") @Max(value = 100, message = "minDiscountPercentage must be at most 100") int minDiscountPercentage) throws IOException {
+
+        log.info("Generating PDF discount report - store: {}, category: {}, minDiscount: {}%",
+                store, category, minDiscountPercentage);
+
+        Map<String, PriceAnalysisService.StoreDiscountGroup> discounts =
+                priceAnalysisService.getDiscountReportGroupedByStore(minDiscountPercentage);
+
+        // Apply store filter in controller
+        if (store != null && !store.isBlank()) {
+            String storeUpper = store.toUpperCase();
+            discounts = discounts.entrySet().stream()
+                    .filter(e -> e.getValue().store().getCode().equalsIgnoreCase(storeUpper))
+                    .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        }
+
+        byte[] pdfBytes = reportGenerationService.generateDiscountReportPdf(
+                discounts, store, category, minDiscountPercentage);
+
+        String filename = "discount-report-" + LocalDate.now() + ".pdf";
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .body(pdfBytes);
+    }
+
     @PostMapping("/discounts/telegram")
     @Operation(summary = "Send discount report to Telegram",
                description = "Generates a discount report and sends it to all active Telegram subscribers.")
     public ResponseEntity<DiscountReportResponse> sendDiscountReportToTelegram(
             @Parameter(description = "Minimum discount percentage to include")
-            @RequestParam(defaultValue = "10") int minDiscountPercentage) {
+            @RequestParam(defaultValue = "10") @Min(value = 0, message = "minDiscountPercentage must be at least 0") @Max(value = 100, message = "minDiscountPercentage must be at most 100") int minDiscountPercentage) {
 
         log.info("Generating discount report with min {}% discount and sending to Telegram", minDiscountPercentage);
 

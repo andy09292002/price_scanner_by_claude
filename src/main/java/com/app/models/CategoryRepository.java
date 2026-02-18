@@ -24,4 +24,6 @@ public interface CategoryRepository extends MongoRepository<Category, String> {
     boolean existsByCode(String code);
 
     boolean existsByStoreIdAndCode(String storeId, String code);
+
+    List<Category> findByNameIgnoreCase(String name);
 }

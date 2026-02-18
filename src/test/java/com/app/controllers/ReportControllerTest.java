@@ -4,6 +4,7 @@ import com.app.models.PriceRecord;
 import com.app.models.Product;
 import com.app.models.Store;
 import com.app.services.PriceAnalysisService;
+import com.app.services.ReportGenerationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -14,14 +15,14 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 
+import java.io.IOException;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -32,6 +33,9 @@ class ReportControllerTest {
 
     @Mock
     private PriceAnalysisService priceAnalysisService;
+
+    @Mock
+    private ReportGenerationService reportGenerationService;
 
     @InjectMocks
     private ReportController reportController;
@@ -214,5 +218,77 @@ class ReportControllerTest {
 
         assertThrows(IllegalArgumentException.class,
                 () -> reportController.getCurrentSalesForStore("INVALID", 50));
+    }
+
+    // --- PDF Endpoint Tests ---
+
+    @Test
+    void downloadDiscountReportPdf_Success() throws IOException {
+        byte[] fakePdf = "%PDF-1.4 fake content".getBytes();
+        Map<String, PriceAnalysisService.StoreDiscountGroup> discounts = Map.of(
+                "Test Store", new PriceAnalysisService.StoreDiscountGroup(testStore, 1, List.of(
+                        new PriceAnalysisService.DiscountedItemDetail(
+                                testProduct, new BigDecimal("10.00"), new BigDecimal("7.00"),
+                                new BigDecimal("3.00"), 30.0, "Save $3", LocalDateTime.now())
+                )));
+
+        when(priceAnalysisService.getDiscountReportGroupedByStore(10)).thenReturn(discounts);
+        when(reportGenerationService.generateDiscountReportPdf(any(), isNull(), isNull(), eq(10)))
+                .thenReturn(fakePdf);
+
+        ResponseEntity<byte[]> response = reportController.downloadDiscountReportPdf(null, null, 10);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals(MediaType.APPLICATION_PDF, response.getHeaders().getContentType());
+        assertTrue(response.getHeaders().getFirst("Content-Disposition")
+                .contains("discount-report-" + LocalDate.now()));
+        assertArrayEquals(fakePdf, response.getBody());
+    }
+
+    @Test
+    void downloadDiscountReportPdf_WithStoreFilter() throws IOException {
+        byte[] fakePdf = "%PDF-1.4 fake content".getBytes();
+
+        Store walmartStore = Store.builder().name("Walmart").code("WALMART").build();
+        walmartStore.setId("store-w");
+        Store rcssStore = Store.builder().name("Superstore").code("RCSS").build();
+        rcssStore.setId("store-r");
+
+        Map<String, PriceAnalysisService.StoreDiscountGroup> discounts = new HashMap<>();
+        discounts.put("Walmart", new PriceAnalysisService.StoreDiscountGroup(walmartStore, 1, List.of(
+                new PriceAnalysisService.DiscountedItemDetail(
+                        testProduct, new BigDecimal("10.00"), new BigDecimal("7.00"),
+                        new BigDecimal("3.00"), 30.0, null, LocalDateTime.now())
+        )));
+        discounts.put("Superstore", new PriceAnalysisService.StoreDiscountGroup(rcssStore, 1, List.of(
+                new PriceAnalysisService.DiscountedItemDetail(
+                        testProduct, new BigDecimal("5.00"), new BigDecimal("4.00"),
+                        new BigDecimal("1.00"), 20.0, null, LocalDateTime.now())
+        )));
+
+        when(priceAnalysisService.getDiscountReportGroupedByStore(10)).thenReturn(discounts);
+        when(reportGenerationService.generateDiscountReportPdf(argThat(map -> map.size() == 1 && map.containsKey("Walmart")),
+                eq("WALMART"), isNull(), eq(10)))
+                .thenReturn(fakePdf);
+
+        ResponseEntity<byte[]> response = reportController.downloadDiscountReportPdf("WALMART", null, 10);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertArrayEquals(fakePdf, response.getBody());
+    }
+
+    @Test
+    void downloadDiscountReportPdf_EmptyResults_ReturnsValidPdf() throws IOException {
+        byte[] fakePdf = "%PDF-1.4 empty".getBytes();
+
+        when(priceAnalysisService.getDiscountReportGroupedByStore(10)).thenReturn(Map.of());
+        when(reportGenerationService.generateDiscountReportPdf(eq(Map.of()), isNull(), isNull(), eq(10)))
+                .thenReturn(fakePdf);
+
+        ResponseEntity<byte[]> response = reportController.downloadDiscountReportPdf(null, null, 10);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals(MediaType.APPLICATION_PDF, response.getHeaders().getContentType());
+        assertNotNull(response.getBody());
     }
 }

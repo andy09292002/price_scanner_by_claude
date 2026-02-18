@@ -119,6 +119,13 @@
             <version>1.41.0</version>
         </dependency>
 
+        <!-- PDF Generation -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>3.0.1</version>
+        </dependency>
+
         <!-- Rate limiting -->
         <dependency>
             <groupId>io.github.resilience4j</groupId>

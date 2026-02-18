@@ -5,9 +5,13 @@ import com.app.services.TelegramNotificationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -16,6 +20,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/telegram")
 @RequiredArgsConstructor
+@Validated
 @Tag(name = "Telegram", description = "Endpoints for managing Telegram subscriptions")
 public class TelegramController {
 
@@ -26,7 +31,7 @@ public class TelegramController {
                description = "Subscribes a Telegram chat to receive price drop alerts.")
     public ResponseEntity<TelegramSubscription> subscribe(
             @Parameter(description = "Telegram chat ID")
-            @RequestParam Long chatId,
+            @RequestParam @NotNull(message = "Chat ID is required") Long chatId,
             @Parameter(description = "Username (optional)")
             @RequestParam(required = false) String username) {
 
@@ -40,9 +45,9 @@ public class TelegramController {
                description = "Updates the notification settings for a subscribed chat.")
     public ResponseEntity<TelegramSubscription> updateSettings(
             @Parameter(description = "Telegram chat ID")
-            @PathVariable Long chatId,
+            @PathVariable @NotNull(message = "Chat ID is required") Long chatId,
             @Parameter(description = "Minimum price drop percentage to trigger notification")
-            @RequestParam(required = false) Integer minDropPercentage,
+            @RequestParam(required = false) @Min(value = 0, message = "minDropPercentage must be at least 0") @Max(value = 100, message = "minDropPercentage must be at most 100") Integer minDropPercentage,
             @Parameter(description = "Store codes to filter (comma-separated)")
             @RequestParam(required = false) List<String> storeFilters,
             @Parameter(description = "Category codes to filter (comma-separated)")

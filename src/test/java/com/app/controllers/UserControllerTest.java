@@ -166,4 +166,147 @@ class UserControllerTest {
 
         verify(userRepository, never()).deleteById(any());
     }
+
+    @Test
+    void createUser_WithBlankUsername_ReturnsBadRequest() throws Exception {
+        User invalidUser = User.builder()
+                .username("")
+                .email("test@example.com")
+                .password("password123")
+                .active(true)
+                .build();
+
+        mockMvc.perform(post("/api/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(invalidUser)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void createUser_WithNullUsername_ReturnsBadRequest() throws Exception {
+        User invalidUser = User.builder()
+                .email("test@example.com")
+                .password("password123")
+                .active(true)
+                .build();
+
+        mockMvc.perform(post("/api/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(invalidUser)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void createUser_WithInvalidEmail_ReturnsBadRequest() throws Exception {
+        User invalidUser = User.builder()
+                .username("testuser")
+                .email("not-an-email")
+                .password("password123")
+                .active(true)
+                .build();
+
+        mockMvc.perform(post("/api/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(invalidUser)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void createUser_WithBlankEmail_ReturnsBadRequest() throws Exception {
+        User invalidUser = User.builder()
+                .username("testuser")
+                .email("")
+                .password("password123")
+                .active(true)
+                .build();
+
+        mockMvc.perform(post("/api/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(invalidUser)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void createUser_WithShortPassword_ReturnsBadRequest() throws Exception {
+        User invalidUser = User.builder()
+                .username("testuser")
+                .email("test@example.com")
+                .password("12345")
+                .active(true)
+                .build();
+
+        mockMvc.perform(post("/api/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(invalidUser)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void createUser_WithBlankPassword_ReturnsBadRequest() throws Exception {
+        User invalidUser = User.builder()
+                .username("testuser")
+                .email("test@example.com")
+                .password("")
+                .active(true)
+                .build();
+
+        mockMvc.perform(post("/api/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(invalidUser)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void createUser_WithShortUsername_ReturnsBadRequest() throws Exception {
+        User invalidUser = User.builder()
+                .username("ab")
+                .email("test@example.com")
+                .password("password123")
+                .active(true)
+                .build();
+
+        mockMvc.perform(post("/api/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(invalidUser)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void updateUser_WithInvalidData_ReturnsBadRequest() throws Exception {
+        User invalidUser = User.builder()
+                .username("")
+                .email("invalid")
+                .password("short")
+                .active(true)
+                .build();
+
+        mockMvc.perform(put("/api/users/test-id-123")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(invalidUser)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+
+        verify(userRepository, never()).save(any(User.class));
+    }
 }

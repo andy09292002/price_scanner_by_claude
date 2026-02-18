@@ -6,10 +6,12 @@ import com.app.models.UserRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,6 +20,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/users")
 @RequiredArgsConstructor
+@Validated
 @Tag(name = "User", description = "User management APIs")
 public class UserController {
 
@@ -33,7 +36,7 @@ public class UserController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Get user by ID")
-    public ResponseEntity<User> getUserById(@PathVariable String id) {
+    public ResponseEntity<User> getUserById(@PathVariable @NotBlank(message = "User ID must not be blank") String id) {
         log.debug("Fetching user with id: {}", id);
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
@@ -59,7 +62,7 @@ public class UserController {
 
     @PutMapping("/{id}")
     @Operation(summary = "Update an existing user")
-    public ResponseEntity<User> updateUser(@PathVariable String id, @Valid @RequestBody User user) {
+    public ResponseEntity<User> updateUser(@PathVariable @NotBlank(message = "User ID must not be blank") String id, @Valid @RequestBody User user) {
         log.debug("Updating user with id: {}", id);
 
         User existingUser = userRepository.findById(id)
@@ -73,7 +76,7 @@ public class UserController {
 
     @DeleteMapping("/{id}")
     @Operation(summary = "Delete a user")
-    public ResponseEntity<Void> deleteUser(@PathVariable String id) {
+    public ResponseEntity<Void> deleteUser(@PathVariable @NotBlank(message = "User ID must not be blank") String id) {
         log.debug("Deleting user with id: {}", id);
 
         if (!userRepository.existsById(id)) {
