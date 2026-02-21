@@ -163,3 +163,44 @@ products._id    →  price_records.productId
 - Category filtering via `CategoryRepository.findByNameIgnoreCase()`
 - Non-ASCII character sanitization for Helvetica font compatibility
 - Unit tests: 8 service tests + 3 controller tests covering happy path, empty data, filters, null images, and multi-page generation
+
+## Sixth Iteration
+
+### Global Exception Handling
+- Added centralized `GlobalExceptionHandler` using `@RestControllerAdvice`
+- Consistent `ErrorResponse` record for all error responses with fields: `timestamp`, `status`, `error`, `message`, `path`
+- Handles the following exception types:
+  | Exception | HTTP Status |
+  |-----------|-------------|
+  | `ResourceNotFoundException` | 404 Not Found |
+  | `MethodArgumentNotValidException` | 400 Bad Request |
+  | `ConstraintViolationException` | 400 Bad Request |
+  | `IllegalArgumentException` | 400 Bad Request |
+  | `MissingServletRequestParameterException` | 400 Bad Request |
+  | `HttpRequestMethodNotSupportedException` | 405 Method Not Allowed |
+  | `ClientAbortException` | (logged, no response) |
+  | `Exception` (catch-all) | 500 Internal Server Error |
+- Custom `ResourceNotFoundException` replaces inline 404 handling across all controllers
+
+### Input Validation
+- Added Jakarta Bean Validation annotations to controller parameters across `ReportController`, `ProductController`, `UserController`, `ScrapeController`, `TelegramController`
+- Validation constraints applied:
+  - `@NotBlank` on path variables and required string params (product IDs, store IDs, chat IDs)
+  - `@Min` / `@Max` on numeric params (e.g., `minDropPercentage` 0–100, `limit` 1–500, `days` 1–365)
+- Controllers annotated with `@Validated` to activate method-level constraint validation
+
+### PriceSmart Scraper Sale Detection
+- Enhanced product parsing to detect promotions and calculate original vs. sale prices
+- Badge parsing: scans `[class*=Badge]` and `[class*=PromotionBadge]` elements for promo text
+- Supports multiple discount formats:
+  - **"SAVE $X.XX"** — back-calculates original price from displayed price + savings
+  - **"X% OFF"** — derives original price from displayed price and percentage
+  - **"Was" price** — detects strikethrough/multiple price elements and identifies the higher as original
+  - **"View Deal"** indicator — flags item as on sale
+- Promo description now populated from badge text
+
+### Unit Tests
+- Added `GlobalExceptionHandlerTest` — 146 lines covering all exception handler paths
+- Expanded `ReportControllerTest` with validation edge cases for invalid/boundary parameter values
+- Expanded `UserControllerTest` with validation tests for blank and invalid input
+- Updated `ScrapeControllerTest` assertions for new error response structure

@@ -232,11 +232,11 @@ class ReportControllerTest {
                                 new BigDecimal("3.00"), 30.0, "Save $3", LocalDateTime.now())
                 )));
 
-        when(priceAnalysisService.getDiscountReportGroupedByStore(10)).thenReturn(discounts);
-        when(reportGenerationService.generateDiscountReportPdf(any(), isNull(), isNull(), eq(10)))
+        when(priceAnalysisService.getDiscountReportGroupedByStore(10, 7)).thenReturn(discounts);
+        when(reportGenerationService.generateDiscountReportPdf(any(), isNull(), isNull(), eq(10), eq(true)))
                 .thenReturn(fakePdf);
 
-        ResponseEntity<byte[]> response = reportController.downloadDiscountReportPdf(null, null, 10);
+        ResponseEntity<byte[]> response = reportController.downloadDiscountReportPdf(null, null, 10, 7, true, 10);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(MediaType.APPLICATION_PDF, response.getHeaders().getContentType());
@@ -266,12 +266,12 @@ class ReportControllerTest {
                         new BigDecimal("1.00"), 20.0, null, LocalDateTime.now())
         )));
 
-        when(priceAnalysisService.getDiscountReportGroupedByStore(10)).thenReturn(discounts);
+        when(priceAnalysisService.getDiscountReportGroupedByStore(10, 7)).thenReturn(discounts);
         when(reportGenerationService.generateDiscountReportPdf(argThat(map -> map.size() == 1 && map.containsKey("Walmart")),
-                eq("WALMART"), isNull(), eq(10)))
+                eq("WALMART"), isNull(), eq(10), eq(true)))
                 .thenReturn(fakePdf);
 
-        ResponseEntity<byte[]> response = reportController.downloadDiscountReportPdf("WALMART", null, 10);
+        ResponseEntity<byte[]> response = reportController.downloadDiscountReportPdf("WALMART", null, 10, 7, true, 10);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertArrayEquals(fakePdf, response.getBody());
@@ -281,11 +281,11 @@ class ReportControllerTest {
     void downloadDiscountReportPdf_EmptyResults_ReturnsValidPdf() throws IOException {
         byte[] fakePdf = "%PDF-1.4 empty".getBytes();
 
-        when(priceAnalysisService.getDiscountReportGroupedByStore(10)).thenReturn(Map.of());
-        when(reportGenerationService.generateDiscountReportPdf(eq(Map.of()), isNull(), isNull(), eq(10)))
+        when(priceAnalysisService.getDiscountReportGroupedByStore(10, 7)).thenReturn(Map.of());
+        when(reportGenerationService.generateDiscountReportPdf(eq(Map.of()), isNull(), isNull(), eq(10), eq(true)))
                 .thenReturn(fakePdf);
 
-        ResponseEntity<byte[]> response = reportController.downloadDiscountReportPdf(null, null, 10);
+        ResponseEntity<byte[]> response = reportController.downloadDiscountReportPdf(null, null, 10, 7, true, 10);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(MediaType.APPLICATION_PDF, response.getHeaders().getContentType());

@@ -346,8 +346,20 @@ public class PriceSmartScraper extends AbstractStoreScraper {
         BigDecimal unitPrice = parsePrice(unitPriceText);
 
         // Extract image URL
-        Element imgElement = element.selectFirst("[class*=ProductCardImage]");
-        String imageUrl = imgElement != null ? imgElement.attr("src") : null;
+        String imageUrl = null;
+        Element imgContainer = element.selectFirst("[class*=ProductCardImage]");
+        if (imgContainer != null) {
+            // The container may be a <div>; find the actual <img> inside it
+            Element imgElement = imgContainer.tagName().equalsIgnoreCase("img")
+                    ? imgContainer
+                    : imgContainer.selectFirst("img");
+            if (imgElement != null) {
+                imageUrl = imgElement.attr("src");
+                if (imageUrl == null || imageUrl.isBlank()) {
+                    imageUrl = imgElement.attr("data-src");
+                }
+            }
+        }
 
         // Extract product link
         Element linkElement = element.selectFirst("a[class*=ProductCardHiddenLink]");

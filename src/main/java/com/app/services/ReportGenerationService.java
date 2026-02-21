@@ -50,12 +50,23 @@ public class ReportGenerationService {
             Map<String, PriceAnalysisService.StoreDiscountGroup> discountData,
             String storeFilter, String categoryFilter,
             int minDiscountPercentage) throws IOException {
+        return generateDiscountReportPdf(discountData, storeFilter, categoryFilter, minDiscountPercentage, false);
+    }
+
+    public byte[] generateDiscountReportPdf(
+            Map<String, PriceAnalysisService.StoreDiscountGroup> discountData,
+            String storeFilter, String categoryFilter,
+            int minDiscountPercentage, boolean includeImages) throws IOException {
 
         // Apply category filter if provided
         Map<String, PriceAnalysisService.StoreDiscountGroup> filteredData = discountData;
         if (categoryFilter != null && !categoryFilter.isBlank()) {
             filteredData = applyCategoryFilter(discountData, categoryFilter);
         }
+
+        log.info("Starting PDF generation with {} store groups, {} total items",
+                filteredData.size(),
+                filteredData.values().stream().mapToInt(PriceAnalysisService.StoreDiscountGroup::itemCount).sum());
 
         try (PDDocument document = new PDDocument()) {
             PDType1Font fontBold = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
@@ -137,7 +148,13 @@ public class ReportGenerationService {
                         y = PAGE_HEIGHT - MARGIN;
                     }
 
-                    y = drawProductRow(document, cs, fontRegular, fontBold, y, item);
+                    try {
+                        y = drawProductRow(document, cs, fontRegular, fontBold, y, item, includeImages);
+                    } catch (Exception e) {
+                        log.warn("Failed to draw product row for '{}': {}",
+                                item.product() != null ? item.product().getName() : "unknown", e.getMessage());
+                        y -= ROW_HEIGHT;
+                    }
                 }
             }
 
@@ -223,26 +240,29 @@ public class ReportGenerationService {
 
     private float drawProductRow(PDDocument document, PDPageContentStream cs,
                                  PDType1Font fontRegular, PDType1Font fontBold,
-                                 float y, PriceAnalysisService.DiscountedItemDetail item) throws IOException {
+                                 float y, PriceAnalysisService.DiscountedItemDetail item,
+                                 boolean includeImages) throws IOException {
 
         Product product = item.product();
         float rowStartY = y;
 
         // Try to draw product image
         float textX = MARGIN + IMAGE_SIZE + 5;
-        if (product.getImageUrl() != null && !product.getImageUrl().isBlank()) {
-            try {
-                byte[] imageBytes = fetchImage(product.getImageUrl());
-                if (imageBytes != null) {
-                    PDImageXObject image = PDImageXObject.createFromByteArray(document, imageBytes, "product");
-                    cs.drawImage(image, MARGIN, y - IMAGE_SIZE + 10, IMAGE_SIZE, IMAGE_SIZE);
+        if (includeImages) {
+            if (product.getImageUrl() != null && !product.getImageUrl().isBlank()) {
+                try {
+                    byte[] imageBytes = fetchImage(product.getImageUrl());
+                    if (imageBytes != null) {
+                        PDImageXObject image = PDImageXObject.createFromByteArray(document, imageBytes, "product");
+                        cs.drawImage(image, MARGIN, y - IMAGE_SIZE + 10, IMAGE_SIZE, IMAGE_SIZE);
+                    }
+                } catch (Exception e) {
+                    log.debug("Failed to load image for product {}: {}", product.getName(), e.getMessage());
+                    drawImagePlaceholder(cs, fontRegular, MARGIN, y - IMAGE_SIZE + 10);
                 }
-            } catch (Exception e) {
-                log.debug("Failed to load image for product {}: {}", product.getName(), e.getMessage());
+            } else {
                 drawImagePlaceholder(cs, fontRegular, MARGIN, y - IMAGE_SIZE + 10);
             }
-        } else {
-            drawImagePlaceholder(cs, fontRegular, MARGIN, y - IMAGE_SIZE + 10);
         }
 
         // Product name (truncate if too long)
@@ -337,12 +357,13 @@ public class ReportGenerationService {
     byte[] fetchImage(String imageUrl) {
         try {
             HttpURLConnection conn = (HttpURLConnection) URI.create(imageUrl).toURL().openConnection();
-            conn.setConnectTimeout(3000);
-            conn.setReadTimeout(5000);
+            conn.setConnectTimeout(1000);
+            conn.setReadTimeout(2000);
             conn.setRequestProperty("User-Agent", "Mozilla/5.0");
             conn.setInstanceFollowRedirects(true);
 
             if (conn.getResponseCode() != 200) {
+                conn.disconnect();
                 return null;
             }
 
@@ -357,6 +378,8 @@ public class ReportGenerationService {
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 ImageIO.write(bufferedImage, "PNG", baos);
                 return baos.toByteArray();
+            } finally {
+                conn.disconnect();
             }
         } catch (Exception e) {
             log.debug("Failed to fetch image from {}: {}", imageUrl, e.getMessage());

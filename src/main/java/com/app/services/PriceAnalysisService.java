@@ -280,13 +280,17 @@ public class PriceAnalysisService {
     }
 
     public Map<String, List<DiscountedItem>> getAllDiscountedItemsGroupedByStore(int minDiscountPercentage) {
-        LocalDateTime oneDayAgo = LocalDateTime.now().minusDays(1);
+        return getAllDiscountedItemsGroupedByStore(minDiscountPercentage, 7);
+    }
+
+    public Map<String, List<DiscountedItem>> getAllDiscountedItemsGroupedByStore(int minDiscountPercentage, int lookbackDays) {
+        LocalDateTime cutoff = LocalDateTime.now().minusDays(lookbackDays);
         List<Store> stores = storeRepository.findByActiveTrue();
         Map<String, Store> storeMap = stores.stream()
                 .collect(Collectors.toMap(Store::getId, s -> s));
 
         // Get all recent sales
-        List<PriceRecord> allSales = priceRecordRepository.findByScrapedAtAfter(oneDayAgo)
+        List<PriceRecord> allSales = priceRecordRepository.findByScrapedAtAfter(cutoff)
                 .stream()
                 .filter(PriceRecord::isOnSale)
                 .filter(r -> r.getRegularPrice() != null && r.getSalePrice() != null)
@@ -353,13 +357,17 @@ public class PriceAnalysisService {
     }
 
     public Map<String, StoreDiscountGroup> getDiscountReportGroupedByStore(int minDiscountPercentage) {
-        LocalDateTime oneDayAgo = LocalDateTime.now().minusDays(1);
+        return getDiscountReportGroupedByStore(minDiscountPercentage, 7);
+    }
+
+    public Map<String, StoreDiscountGroup> getDiscountReportGroupedByStore(int minDiscountPercentage, int lookbackDays) {
+        LocalDateTime cutoff = LocalDateTime.now().minusDays(lookbackDays);
         List<Store> stores = storeRepository.findByActiveTrue();
         Map<String, Store> storeMap = stores.stream()
                 .collect(Collectors.toMap(Store::getId, s -> s));
 
         // Get all recent sales
-        List<PriceRecord> allSales = priceRecordRepository.findByScrapedAtAfter(oneDayAgo)
+        List<PriceRecord> allSales = priceRecordRepository.findByScrapedAtAfter(cutoff)
                 .stream()
                 .filter(PriceRecord::isOnSale)
                 .filter(r -> r.getRegularPrice() != null && r.getSalePrice() != null)

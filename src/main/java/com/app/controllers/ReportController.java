@@ -117,11 +117,13 @@ public class ReportController {
                description = "Returns all products currently on discount, grouped by store. Store info appears once per group.")
     public ResponseEntity<Map<String, PriceAnalysisService.StoreDiscountGroup>> getDiscountedItems(
             @Parameter(description = "Minimum discount percentage to include")
-            @RequestParam(defaultValue = "10") @Min(value = 0, message = "minDiscountPercentage must be at least 0") @Max(value = 100, message = "minDiscountPercentage must be at most 100") int minDiscountPercentage) {
+            @RequestParam(defaultValue = "10") @Min(value = 0, message = "minDiscountPercentage must be at least 0") @Max(value = 100, message = "minDiscountPercentage must be at most 100") int minDiscountPercentage,
+            @Parameter(description = "Number of days to look back for scraped data")
+            @RequestParam(defaultValue = "7") @Min(value = 1, message = "lookbackDays must be at least 1") @Max(value = 30, message = "lookbackDays must be at most 30") int lookbackDays) {
 
-        log.debug("Getting discounted items with min {}% discount", minDiscountPercentage);
+        log.debug("Getting discounted items with min {}% discount, lookback {} days", minDiscountPercentage, lookbackDays);
         Map<String, PriceAnalysisService.StoreDiscountGroup> discounts =
-                priceAnalysisService.getDiscountReportGroupedByStore(minDiscountPercentage);
+                priceAnalysisService.getDiscountReportGroupedByStore(minDiscountPercentage, lookbackDays);
         return ResponseEntity.ok(discounts);
     }
 
@@ -134,13 +136,23 @@ public class ReportController {
             @Parameter(description = "Filter by category name (e.g., produce, dairy)")
             @RequestParam(required = false) String category,
             @Parameter(description = "Minimum discount percentage to include")
-            @RequestParam(defaultValue = "10") @Min(value = 0, message = "minDiscountPercentage must be at least 0") @Max(value = 100, message = "minDiscountPercentage must be at most 100") int minDiscountPercentage) throws IOException {
+            @RequestParam(defaultValue = "10") @Min(value = 0, message = "minDiscountPercentage must be at least 0") @Max(value = 100, message = "minDiscountPercentage must be at most 100") int minDiscountPercentage,
+            @Parameter(description = "Number of days to look back for scraped data")
+            @RequestParam(defaultValue = "7") @Min(value = 1, message = "lookbackDays must be at least 1") @Max(value = 30, message = "lookbackDays must be at most 30") int lookbackDays,
+            @Parameter(description = "Include product images in PDF (slower)")
+            @RequestParam(defaultValue = "true") boolean includeImages,
+            @Parameter(description = "Maximum number of items to show per store (0 = unlimited)")
+            @RequestParam(defaultValue = "10") @Min(value = 0, message = "itemsPerStore must be at least 0") @Max(value = 500, message = "itemsPerStore must be at most 500") int itemsPerStore) throws IOException {
 
-        log.info("Generating PDF discount report - store: {}, category: {}, minDiscount: {}%",
-                store, category, minDiscountPercentage);
+        log.info("Generating PDF discount report - store: {}, category: {}, minDiscount: {}%, lookbackDays: {}, itemsPerStore: {}",
+                store, category, minDiscountPercentage, lookbackDays, itemsPerStore);
 
         Map<String, PriceAnalysisService.StoreDiscountGroup> discounts =
-                priceAnalysisService.getDiscountReportGroupedByStore(minDiscountPercentage);
+                priceAnalysisService.getDiscountReportGroupedByStore(minDiscountPercentage, lookbackDays);
+
+        int totalItems = discounts.values().stream()
+                .mapToInt(PriceAnalysisService.StoreDiscountGroup::itemCount).sum();
+        log.info("Found {} discount items across {} stores", totalItems, discounts.size());
 
         // Apply store filter in controller
         if (store != null && !store.isBlank()) {
@@ -150,8 +162,15 @@ public class ReportController {
                     .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
         }
 
+        // Limit items per store
+        if (itemsPerStore > 0) {
+            discounts = limitItemsPerStore(discounts, itemsPerStore);
+        }
+
         byte[] pdfBytes = reportGenerationService.generateDiscountReportPdf(
-                discounts, store, category, minDiscountPercentage);
+                discounts, store, category, minDiscountPercentage, includeImages);
+
+        log.info("PDF generated successfully, size: {} bytes", pdfBytes.length);
 
         String filename = "discount-report-" + LocalDate.now() + ".pdf";
 
@@ -187,6 +206,20 @@ public class ReportController {
                 storeCount,
                 subscribersSent
         ));
+    }
+
+    private Map<String, PriceAnalysisService.StoreDiscountGroup> limitItemsPerStore(
+            Map<String, PriceAnalysisService.StoreDiscountGroup> discounts, int limit) {
+        return discounts.entrySet().stream()
+                .map(entry -> {
+                    PriceAnalysisService.StoreDiscountGroup group = entry.getValue();
+                    List<PriceAnalysisService.DiscountedItemDetail> limited = group.items().stream()
+                            .limit(limit)
+                            .toList();
+                    return Map.entry(entry.getKey(),
+                            new PriceAnalysisService.StoreDiscountGroup(group.store(), limited.size(), limited));
+                })
+                .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     public record DiscountReportResponse(
