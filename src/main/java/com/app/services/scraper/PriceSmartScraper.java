@@ -299,10 +299,29 @@ public class PriceSmartScraper extends AbstractStoreScraper {
                 }
             }
 
-            // Scroll to load more products
+            // Scroll to load more products and trigger lazy image loading
             for (int i = 0; i < 3; i++) {
                 page.evaluate("window.scrollBy(0, window.innerHeight)");
-                page.waitForTimeout(1500);
+                page.waitForTimeout(2000);
+            }
+
+            // Scroll back to top and wait for images to load
+            page.evaluate("window.scrollTo(0, 0)");
+            page.waitForTimeout(1000);
+
+            // Force lazy images to load by scrolling through all product cards
+            page.evaluate("() => {"
+                    + "  const cards = document.querySelectorAll('article[class*=ProductCardWrapper]');"
+                    + "  cards.forEach(card => card.scrollIntoView({behavior: 'instant'}));"
+                    + "}");
+            page.waitForTimeout(2000);
+
+            // Wait for network to be mostly idle (images loading)
+            try {
+                page.waitForLoadState(LoadState.NETWORKIDLE,
+                        new Page.WaitForLoadStateOptions().setTimeout(10000));
+            } catch (Exception e) {
+                log.debug("Network idle timeout, proceeding with available content");
             }
 
             String content = page.content();
@@ -355,10 +374,50 @@ public class PriceSmartScraper extends AbstractStoreScraper {
                     : imgContainer.selectFirst("img");
             if (imgElement != null) {
                 imageUrl = imgElement.attr("src");
+                // Fall back to data-src for lazy-loaded images
                 if (imageUrl == null || imageUrl.isBlank()) {
                     imageUrl = imgElement.attr("data-src");
                 }
+                // Fall back to srcset (take the first URL)
+                if (imageUrl == null || imageUrl.isBlank()) {
+                    String srcset = imgElement.attr("srcset");
+                    if (srcset != null && !srcset.isBlank()) {
+                        imageUrl = srcset.split("[,\\s]")[0].trim();
+                    }
+                }
+                // Skip blob: or data: placeholder URLs
+                if (imageUrl != null && (imageUrl.startsWith("blob:") || imageUrl.startsWith("data:"))) {
+                    imageUrl = null;
+                }
             }
+        }
+        // Broader fallback: look for any img inside the product card with a valid URL
+        if (imageUrl == null || imageUrl.isBlank()) {
+            for (Element img : element.select("img")) {
+                String src = img.attr("src");
+                if (src != null && !src.isBlank() && src.startsWith("http") && !src.contains("placeholder")) {
+                    imageUrl = src;
+                    break;
+                }
+                String srcset = img.attr("srcset");
+                if (srcset != null && !srcset.isBlank()) {
+                    String candidate = srcset.split("[,\\s]")[0].trim();
+                    if (candidate.startsWith("http")) {
+                        imageUrl = candidate;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (imageUrl != null && !imageUrl.isBlank()) {
+            log.debug("Extracted image URL for {}: {}", fullName, imageUrl);
+        } else {
+            // Log all img tags found for debugging
+            Elements allImgs = element.select("img");
+            log.debug("No image found for {}. Found {} img tags. First img attrs: {}",
+                    fullName, allImgs.size(),
+                    allImgs.isEmpty() ? "none" : allImgs.first().attributes());
         }
 
         // Extract product link

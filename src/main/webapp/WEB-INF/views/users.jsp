@@ -5,12 +5,13 @@
 <head>
     <meta charset="UTF-8">
     <title>Users</title>
+    <link rel="stylesheet" href="/css/theme.css">
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
+        body { font-family: Arial, sans-serif; margin: 20px; background: var(--bg-primary); color: var(--text-primary); }
         table { border-collapse: collapse; width: 100%; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background-color: #4CAF50; color: white; }
-        tr:nth-child(even) { background-color: #f2f2f2; }
+        th, td { border: 1px solid var(--border-color); padding: 8px; text-align: left; }
+        th { background-color: var(--accent); color: white; }
+        tr:nth-child(even) { background-color: var(--bg-table-stripe); }
     </style>
 </head>
 <body>
@@ -35,5 +36,6 @@
             </c:forEach>
         </tbody>
     </table>
+    <script src="/js/theme.js"></script>
 </body>
 </html>

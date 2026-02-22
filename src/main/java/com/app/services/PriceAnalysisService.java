@@ -12,6 +12,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -22,6 +23,7 @@ public class PriceAnalysisService {
     private final PriceRecordRepository priceRecordRepository;
     private final ProductRepository productRepository;
     private final StoreRepository storeRepository;
+    private final CategoryRepository categoryRepository;
 
     public record PriceDrop(
             Product product,
@@ -426,5 +428,191 @@ public class PriceAnalysisService {
         }
 
         return result;
+    }
+
+    public record ProductPriceRow(
+            String productId,
+            String name,
+            String brand,
+            String size,
+            String unit,
+            BigDecimal regularPrice,
+            BigDecimal salePrice,
+            boolean onSale,
+            double discountPercent,
+            String imageUrl
+    ) {}
+
+    public record CategoryGroup(
+            String categoryName,
+            String categoryId,
+            List<ProductPriceRow> products
+    ) {}
+
+    public record StoreGroup(
+            String storeName,
+            String storeId,
+            String storeCode,
+            int productCount,
+            List<CategoryGroup> categories
+    ) {}
+
+    public record ProductListingResponse(
+            List<StoreGroup> groups,
+            int totalProducts,
+            int storeCount
+    ) {}
+
+    public record CategoryStoreGroup(
+            String storeName,
+            String storeId,
+            String storeCode,
+            List<ProductPriceRow> products
+    ) {}
+
+    public record CategoryTopGroup(
+            String categoryName,
+            String categoryId,
+            int productCount,
+            List<CategoryStoreGroup> stores
+    ) {}
+
+    public record CategoryListingResponse(
+            List<CategoryTopGroup> groups,
+            int totalProducts,
+            int categoryCount
+    ) {}
+
+    public ProductListingResponse getProductListingGroupedByStore(
+            List<String> storeIds, List<String> categoryIds, boolean onSaleOnly) {
+
+        List<Store> stores = storeRepository.findByActiveTrue();
+        if (storeIds != null && !storeIds.isEmpty()) {
+            stores = stores.stream()
+                    .filter(s -> storeIds.contains(s.getId()))
+                    .collect(Collectors.toList());
+        }
+
+        Map<String, Category> categoryCache = categoryRepository.findAll().stream()
+                .collect(Collectors.toMap(Category::getId, Function.identity(), (a, b) -> a));
+
+        List<StoreGroup> storeGroups = new ArrayList<>();
+        int totalProducts = 0;
+
+        for (Store store : stores) {
+            // Get latest price records for this store (last 7 days)
+            LocalDateTime cutoff = LocalDateTime.now().minusDays(7);
+            List<PriceRecord> records = priceRecordRepository.findByStoreIdAndScrapedAtAfter(store.getId(), cutoff);
+
+            // Deduplicate: keep latest per product
+            Map<String, PriceRecord> latestByProduct = new HashMap<>();
+            for (PriceRecord r : records) {
+                PriceRecord existing = latestByProduct.get(r.getProductId());
+                if (existing == null || r.getScrapedAt().isAfter(existing.getScrapedAt())) {
+                    latestByProduct.put(r.getProductId(), r);
+                }
+            }
+
+            if (onSaleOnly) {
+                latestByProduct.values().removeIf(r -> !r.isOnSale());
+            }
+
+            // Resolve products and group by category
+            Map<String, List<ProductPriceRow>> byCategoryId = new LinkedHashMap<>();
+
+            for (PriceRecord record : latestByProduct.values()) {
+                Product product = productRepository.findById(record.getProductId()).orElse(null);
+                if (product == null) continue;
+
+                String catId = product.getCategoryId();
+                if (categoryIds != null && !categoryIds.isEmpty() && !categoryIds.contains(catId)) {
+                    continue;
+                }
+
+                BigDecimal discountPct = calculateDiscountPercentage(record);
+
+                ProductPriceRow row = new ProductPriceRow(
+                        product.getId(),
+                        product.getName(),
+                        product.getBrand(),
+                        product.getSize(),
+                        product.getUnit(),
+                        record.getRegularPrice(),
+                        record.getSalePrice(),
+                        record.isOnSale(),
+                        discountPct.doubleValue(),
+                        product.getImageUrl()
+                );
+
+                byCategoryId.computeIfAbsent(catId != null ? catId : "uncategorized", k -> new ArrayList<>()).add(row);
+            }
+
+            List<CategoryGroup> categoryGroups = new ArrayList<>();
+            int storeProductCount = 0;
+
+            for (Map.Entry<String, List<ProductPriceRow>> entry : byCategoryId.entrySet()) {
+                Category cat = categoryCache.get(entry.getKey());
+                String catName = cat != null ? cat.getName() : "Uncategorized";
+                categoryGroups.add(new CategoryGroup(catName, entry.getKey(), entry.getValue()));
+                storeProductCount += entry.getValue().size();
+            }
+
+            categoryGroups.sort(Comparator.comparing(CategoryGroup::categoryName));
+
+            if (storeProductCount > 0) {
+                storeGroups.add(new StoreGroup(
+                        store.getName(), store.getId(), store.getCode(),
+                        storeProductCount, categoryGroups
+                ));
+                totalProducts += storeProductCount;
+            }
+        }
+
+        storeGroups.sort(Comparator.comparing(StoreGroup::storeName));
+        return new ProductListingResponse(storeGroups, totalProducts, storeGroups.size());
+    }
+
+    public CategoryListingResponse getProductListingGroupedByCategory(
+            List<String> storeIds, List<String> categoryIds, boolean onSaleOnly) {
+
+        ProductListingResponse byStore = getProductListingGroupedByStore(storeIds, categoryIds, onSaleOnly);
+
+        // Pivot: Category -> Store -> Products
+        Map<String, Map<String, List<ProductPriceRow>>> catStoreMap = new LinkedHashMap<>();
+        Map<String, String> catNames = new HashMap<>();
+
+        for (StoreGroup sg : byStore.groups()) {
+            for (CategoryGroup cg : sg.categories()) {
+                catNames.put(cg.categoryId(), cg.categoryName());
+                catStoreMap
+                        .computeIfAbsent(cg.categoryId(), k -> new LinkedHashMap<>())
+                        .computeIfAbsent(sg.storeId(), k -> new ArrayList<>())
+                        .addAll(cg.products());
+            }
+        }
+
+        List<CategoryTopGroup> groups = new ArrayList<>();
+        int totalProducts = 0;
+
+        for (Map.Entry<String, Map<String, List<ProductPriceRow>>> catEntry : catStoreMap.entrySet()) {
+            String catId = catEntry.getKey();
+            List<CategoryStoreGroup> storeList = new ArrayList<>();
+            int catProductCount = 0;
+
+            for (Map.Entry<String, List<ProductPriceRow>> storeEntry : catEntry.getValue().entrySet()) {
+                String sId = storeEntry.getKey();
+                Store store = storeRepository.findById(sId).orElse(null);
+                if (store == null) continue;
+                storeList.add(new CategoryStoreGroup(store.getName(), store.getId(), store.getCode(), storeEntry.getValue()));
+                catProductCount += storeEntry.getValue().size();
+            }
+
+            storeList.sort(Comparator.comparing(CategoryStoreGroup::storeName));
+            groups.add(new CategoryTopGroup(catNames.get(catId), catId, catProductCount, storeList));
+            totalProducts += catProductCount;
+        }
+
+        groups.sort(Comparator.comparing(CategoryTopGroup::categoryName));
+        return new CategoryListingResponse(groups, totalProducts, groups.size());
     }
 }

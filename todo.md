@@ -215,13 +215,44 @@ Current coverage: ~30%. Target: 80% per CLAUDE.md.
 - [ ] Add message scheduling (daily/weekly deal summaries)
 - [ ] Add timezone support for scheduled messages
 
-### 19. Frontend / Dashboard
-- [ ] Build a web dashboard (JSP or separate SPA)
-- [ ] Product search and browse UI
-- [ ] Price comparison charts
-- [ ] Price history graphs
-- [ ] Store-by-store deal listings
-- [ ] Admin panel for scrape management
+### 19. Product Price Listing Page (Grouped by Store/Category with Historical Chart)
+Build a web page that displays product prices grouped by store and category, with a line chart showing historical price trends. Prices are loaded daily and do not change within the same day.
+
+~~**Page Layout & Grouping:** ✅~~
+- [x] Create JSP page `/views/price-listing.jsp` with two-level grouping: Store → Category → Products
+- [x] Add collapsible store sections showing store name and product count
+- [x] Within each store, group products by category with category headers
+- [x] Display product table per category: product name, brand, size/unit, current price, sale price (if on sale), discount %
+- [x] Add toggle to switch grouping mode: "By Store" (Store → Category) vs "By Category" (Category → Store)
+- [x] Add filters: store dropdown (multi-select), category dropdown (multi-select), on-sale only checkbox
+
+~~**Historical Price Line Chart:**~~ ✅
+- [x] Integrate a charting library (Chart.js via CDN) for price history visualization
+- [x] Clicking a product row opens a modal/panel with a line chart of its daily price over time
+- [x] X-axis: date (one point per day), Y-axis: price ($)
+- [x] Show both regular price and sale price as separate lines when applicable
+- [x] Support configurable date range: 7 days, 30 days, 90 days (default: 30)
+- [x] Highlight sale periods on the chart (shaded regions or markers)
+- [x] Display min/max/average price stats below the chart
+
+**Backend API Endpoints:**
+- [x] `GET /api/products/listing` — returns products grouped by store and category with current price
+- [x] `GET /api/products/{id}/price-history?days=30` — implemented as `GET /api/reports/history/{productId}` in ReportController
+- [ ] Ensure price history query uses daily aggregation (since price doesn't change within a day, return one record per day)
+- [ ] Add MongoDB aggregation or query to group price records by date (`$dateToString` on `scrapedAt`)
+
+**Controller & Service:**
+- [x] Create `PriceListingController` or add endpoints to existing `ProductController`
+- [x] Create service method to fetch all products with latest price, grouped by store → category
+- [ ] Create service method to fetch daily price history for a single product (deduplicated by day)
+- [x] Add DTO: `ProductListingResponse` (store groups → category groups → product + price details)
+- [ ] Add DTO: `DailyPricePoint` (date, regularPrice, salePrice, onSale)
+
+**Frontend Enhancements:**
+- [x] Add search bar to filter products by name within the listing
+- [x] Add sorting options: by name, by price (low-high / high-low), by discount %
+- [ ] Responsive layout for mobile viewing
+- [x] Lazy-load chart data only when a product is clicked (avoid loading all history upfront)
 
 ### 20. Performance Optimization
 - [ ] Replace `new Thread()` in `ScrapeOrchestrationService` with `ExecutorService` thread pool

@@ -1,0 +1,87 @@
+/* Light theme (default) */
+:root {
+    --bg-primary: #f5f5f5;
+    --bg-card: #fff;
+    --bg-card-hover: #fafafa;
+    --bg-table-header: #f9f9f9;
+    --bg-table-header-hover: #f0f0f0;
+    --bg-table-stripe: #f2f2f2;
+    --bg-sub-section: #e8f5e9;
+    --bg-no-image: #eee;
+    --text-primary: #333;
+    --text-secondary: #555;
+    --text-muted: #999;
+    --text-summary: #666;
+    --border-color: #eee;
+    --border-input: #ccc;
+    --accent: #4CAF50;
+    --accent-dark: #2e7d32;
+    --danger: #d32f2f;
+    --warning: #ff9800;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    --input-bg: #fff;
+}
+
+/* Dark theme */
+[data-theme="dark"] {
+    --bg-primary: #1a1a2e;
+    --bg-card: #16213e;
+    --bg-card-hover: #1a2745;
+    --bg-table-header: #1a1a3e;
+    --bg-table-header-hover: #22224e;
+    --bg-table-stripe: #1e2a48;
+    --bg-sub-section: #1b3a2a;
+    --bg-no-image: #2a2a4a;
+    --text-primary: #e0e0e0;
+    --text-secondary: #b0b0b0;
+    --text-muted: #777;
+    --text-summary: #999;
+    --border-color: #2a2a4a;
+    --border-input: #3a3a5a;
+    --accent: #66BB6A;
+    --accent-dark: #81C784;
+    --danger: #ef5350;
+    --warning: #ffb74d;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    --input-bg: #1e2a48;
+}
+
+/* Smooth transitions */
+body,
+.filter-bar,
+.store-section,
+.category-section,
+.comparison-section,
+.chart-section,
+.product-card,
+table,
+th, td,
+select,
+input {
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Theme toggle button */
+.theme-toggle {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-size: 22px;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+.theme-toggle:hover {
+    transform: scale(1.1);
+}

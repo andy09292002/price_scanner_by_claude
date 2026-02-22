@@ -73,7 +73,7 @@ public class ProductMatchingService {
         boolean updated = false;
 
         // Update image if we don't have one
-        if (product.getImageUrl() == null && scrapedProduct.imageUrl() != null) {
+        if ((product.getImageUrl() == null || product.getImageUrl().isBlank()) && scrapedProduct.imageUrl() != null) {
             product.setImageUrl(scrapedProduct.imageUrl());
             updated = true;
         }
