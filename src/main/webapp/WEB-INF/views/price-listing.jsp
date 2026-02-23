@@ -33,6 +33,13 @@
         .grouping-toggle button:last-child { border-radius: 0 4px 4px 0; }
         .grouping-toggle button.active { background: var(--accent); color: #fff; }
 
+        .price-drop-toggle { display: flex; align-items: center; gap: 6px; }
+        .price-drop-toggle button {
+            padding: 6px 14px; border: 1px solid var(--accent); background: var(--bg-card);
+            color: var(--accent); cursor: pointer; font-size: 14px; border-radius: 4px;
+        }
+        .price-drop-toggle button.active { background: var(--accent); color: #fff; }
+
         .summary { margin-bottom: 16px; color: var(--text-summary); font-size: 14px; }
 
         .store-section, .category-section {
@@ -115,6 +122,11 @@
             <input type="checkbox" id="onSaleOnly">
             <label for="onSaleOnly">On Sale Only</label>
         </div>
+        <div class="price-drop-toggle">
+            <label>Price Dropped:</label>
+            <button id="priceDrop7">7 Days</button>
+            <button id="priceDrop30">30 Days</button>
+        </div>
         <div>
             <input type="text" id="searchInput" placeholder="Search products...">
         </div>
@@ -133,6 +145,7 @@
         let currentData = null;
         let currentGroupBy = 'store';
         let currentSort = { field: 'name', dir: 'asc' };
+        let currentPriceDropDays = null;
 
         function getSelectedValues(selectId) {
             const select = document.getElementById(selectId);
@@ -148,6 +161,7 @@
             if (storeIds.length > 0) params.set('storeIds', storeIds.join(','));
             if (categoryIds.length > 0) params.set('categoryIds', categoryIds.join(','));
             if (onSaleOnly) params.set('onSaleOnly', 'true');
+            if (currentPriceDropDays) params.set('priceDropDays', currentPriceDropDays);
             params.set('groupBy', currentGroupBy);
 
             return params.toString();
@@ -377,6 +391,24 @@
             document.getElementById('groupByStore').classList.remove('active');
             fetchData();
         });
+
+        document.getElementById('priceDrop7').addEventListener('click', () => {
+            togglePriceDrop(7);
+        });
+        document.getElementById('priceDrop30').addEventListener('click', () => {
+            togglePriceDrop(30);
+        });
+
+        function togglePriceDrop(days) {
+            if (currentPriceDropDays === days) {
+                currentPriceDropDays = null;
+            } else {
+                currentPriceDropDays = days;
+            }
+            document.getElementById('priceDrop7').classList.toggle('active', currentPriceDropDays === 7);
+            document.getElementById('priceDrop30').classList.toggle('active', currentPriceDropDays === 30);
+            fetchData();
+        }
 
         // Initial load
         fetchData();

@@ -204,3 +204,35 @@ products._id    →  price_records.productId
 - Expanded `ReportControllerTest` with validation edge cases for invalid/boundary parameter values
 - Expanded `UserControllerTest` with validation tests for blank and invalid input
 - Updated `ScrapeControllerTest` assertions for new error response structure
+
+## Seventh Iteration
+
+### Product Price Listing Page
+- New JSP page `/views/price-listing.jsp` with two-level grouping: Store → Category → Products
+- Collapsible store sections with product counts
+- Toggle between "By Store" and "By Category" grouping modes
+- Filters: store dropdown (multi-select), category dropdown (multi-select), on-sale only checkbox
+- Search bar to filter products by name within the listing
+- Sorting options: by name, by price (low-high / high-low), by discount %
+- Historical price line chart (Chart.js) — clicking a product row opens a modal with daily price history
+  - Regular price and sale price as separate lines
+  - Configurable date range: 7, 30, 90 days
+  - Min/max/average price stats below the chart
+- New endpoint: `GET /api/products/listing` — returns products grouped by store and category with current price
+- New `PriceListingController` with corresponding service methods and DTOs
+
+### Scheduled Scraping
+- Added `@EnableScheduling` via `SchedulingConfig` configuration class
+- New `ScrapeScheduler` component runs `triggerScrapeAll()` on a cron schedule
+- Default schedule: daily at 9:00 AM (server timezone)
+- Cron expression configurable via `scraper.schedule.cron` in `application.properties`
+- Overlapping runs prevented by existing job-level checks in `ScrapeOrchestrationService`
+- Logs scrape start, job count, and any failures
+
+### Unit Tests
+- Added `ScrapeSchedulerTest` — 3 tests: normal execution, empty result, exception handling
+- Added `PriceListingControllerTest` with filtering, sorting, and grouping tests
+- Added `ProductMatchingServiceTest` fixes for updated API
+- Added `PriceAnalysisServiceTest` edge case tests
+- Added scraper tests: `AbstractStoreScraperTest`, `WalmartScraperTest`, `TntScraperTest`, `SuperstoreScraperTest`
+- Added `DataInitializerTest` — 8 tests for store seeding and auto-fix logic

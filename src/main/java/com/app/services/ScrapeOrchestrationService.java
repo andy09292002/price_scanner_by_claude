@@ -8,8 +8,10 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -97,9 +99,10 @@ public class ScrapeOrchestrationService {
 
             log.info("Scraped {} products from {}", scrapedProducts.size(), store.getName());
 
+            Set<String> processedProductStoreKeys = new HashSet<>();
             for (StoreScraper.ScrapedProduct scrapedProduct : scrapedProducts) {
                 try {
-                    processScrapedProduct(scrapedProduct, store);
+                    processScrapedProduct(scrapedProduct, store, processedProductStoreKeys);
                     successCount++;
                 } catch (Exception e) {
                     errorCount++;
@@ -140,9 +143,17 @@ public class ScrapeOrchestrationService {
                 store.getCode(), successCount, errorCount);
     }
 
-    private void processScrapedProduct(StoreScraper.ScrapedProduct scrapedProduct, Store store) {
+    private void processScrapedProduct(StoreScraper.ScrapedProduct scrapedProduct, Store store,
+                                       Set<String> processedProductStoreKeys) {
         // Find or create product
         Product product = productMatchingService.findOrCreateProduct(scrapedProduct, store);
+
+        // Skip duplicate price record if this product+store was already processed in this session
+        String key = product.getId() + "_" + store.getId();
+        if (!processedProductStoreKeys.add(key)) {
+            log.debug("Skipping duplicate price record for product {} in store {}", product.getName(), store.getCode());
+            return;
+        }
 
         // Create price record
         PriceRecord priceRecord = PriceRecord.builder()

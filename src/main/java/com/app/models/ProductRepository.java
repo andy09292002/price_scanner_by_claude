@@ -16,7 +16,9 @@ public interface ProductRepository extends MongoRepository<Product, String> {
 
     List<Product> findByCategoryId(String categoryId);
 
-    Optional<Product> findByNormalizedName(String normalizedName);
+    List<Product> findByNormalizedName(String normalizedName);
+
+    List<Product> findByNormalizedNameAndSizeAndUnit(String normalizedName, String size, String unit);
 
     @Query("{'storeProductIds.?0': ?1}")
     Optional<Product> findByStoreCodeAndStoreProductId(String storeCode, String storeProductId);

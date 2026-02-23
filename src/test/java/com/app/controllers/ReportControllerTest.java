@@ -111,7 +111,8 @@ class ReportControllerTest {
                 new BigDecimal("9.99"),
                 false,
                 null,
-                LocalDateTime.now()
+                LocalDateTime.now(),
+                "https://www.example.com/product/123"
         ));
 
         PriceAnalysisService.PriceComparison comparison = new PriceAnalysisService.PriceComparison(

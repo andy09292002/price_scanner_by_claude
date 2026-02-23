@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -33,16 +34,44 @@ public class ProductMatchingService {
             return product;
         }
 
-        // Try to find by normalized name
+        // Try to find by normalized name, considering size/unit
         String normalizedName = normalizeProductName(scrapedProduct.name());
-        Optional<Product> existingByName = productRepository.findByNormalizedName(normalizedName);
+        String scrapedSize = scrapedProduct.size();
+        String scrapedUnit = scrapedProduct.unit();
+        boolean hasSizeAndUnit = scrapedSize != null && !scrapedSize.isEmpty()
+                && scrapedUnit != null && !scrapedUnit.isEmpty();
 
-        if (existingByName.isPresent()) {
-            Product product = existingByName.get();
-            // Add this store's product ID mapping
-            addStoreProductMapping(product, store.getCode(), scrapedProduct.storeProductId());
-            updateProductIfNeeded(product, scrapedProduct, store);
-            return product;
+        if (hasSizeAndUnit) {
+            // Try exact match on normalizedName + size + unit first
+            List<Product> exactMatches = productRepository.findByNormalizedNameAndSizeAndUnit(
+                    normalizedName, scrapedSize, scrapedUnit);
+            if (!exactMatches.isEmpty()) {
+                Product product = exactMatches.get(0);
+                addStoreProductMapping(product, store.getCode(), scrapedProduct.storeProductId());
+                updateProductIfNeeded(product, scrapedProduct, store);
+                return product;
+            }
+
+            // Fall back to name-only, but only match a product with null/empty size
+            List<Product> nameMatches = productRepository.findByNormalizedName(normalizedName);
+            Optional<Product> sizelessMatch = nameMatches.stream()
+                    .filter(p -> p.getSize() == null || p.getSize().isEmpty())
+                    .findFirst();
+            if (sizelessMatch.isPresent()) {
+                Product product = sizelessMatch.get();
+                addStoreProductMapping(product, store.getCode(), scrapedProduct.storeProductId());
+                updateProductIfNeeded(product, scrapedProduct, store);
+                return product;
+            }
+        } else {
+            // No size/unit available — use name-only match (backward compat)
+            List<Product> nameMatches = productRepository.findByNormalizedName(normalizedName);
+            if (!nameMatches.isEmpty()) {
+                Product product = nameMatches.get(0);
+                addStoreProductMapping(product, store.getCode(), scrapedProduct.storeProductId());
+                updateProductIfNeeded(product, scrapedProduct, store);
+                return product;
+            }
         }
 
         // Create new product
@@ -84,20 +113,18 @@ public class ProductMatchingService {
             updated = true;
         }
 
-        // Update size if we have new valid data
-        if (scrapedProduct.size() != null && !scrapedProduct.size().isEmpty()) {
-            if (product.getSize() == null || !product.getSize().equals(scrapedProduct.size())) {
-                product.setSize(scrapedProduct.size());
-                updated = true;
-            }
+        // Only fill in size if the product doesn't already have one
+        if ((product.getSize() == null || product.getSize().isEmpty())
+                && scrapedProduct.size() != null && !scrapedProduct.size().isEmpty()) {
+            product.setSize(scrapedProduct.size());
+            updated = true;
         }
 
-        // Update unit if we have new valid data
-        if (scrapedProduct.unit() != null && !scrapedProduct.unit().isEmpty()) {
-            if (product.getUnit() == null || !product.getUnit().equals(scrapedProduct.unit())) {
-                product.setUnit(scrapedProduct.unit());
-                updated = true;
-            }
+        // Only fill in unit if the product doesn't already have one
+        if ((product.getUnit() == null || product.getUnit().isEmpty())
+                && scrapedProduct.unit() != null && !scrapedProduct.unit().isEmpty()) {
+            product.setUnit(scrapedProduct.unit());
+            updated = true;
         }
 
         // Ensure store mapping exists

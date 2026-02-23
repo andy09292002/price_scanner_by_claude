@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.function.Function;
@@ -47,7 +48,8 @@ public class PriceAnalysisService {
             BigDecimal price,
             boolean onSale,
             String promoDescription,
-            LocalDateTime lastUpdated
+            LocalDateTime lastUpdated,
+            String sourceUrl
     ) {}
 
     public record PriceHistory(
@@ -204,7 +206,8 @@ public class PriceAnalysisService {
                             effectivePrice,
                             record.isOnSale(),
                             record.getPromoDescription(),
-                            record.getScrapedAt()
+                            record.getScrapedAt(),
+                            record.getSourceUrl()
                     );
                     storePrices.put(store.getCode(), storePrice);
 
@@ -236,7 +239,20 @@ public class PriceAnalysisService {
                 .sorted(Comparator.comparing(PriceRecord::getScrapedAt))
                 .collect(Collectors.toList());
 
-        List<PricePoint> pricePoints = filteredRecords.stream()
+        // Deduplicate: collapse consecutive records with the same effective price
+        List<PriceRecord> deduped = new ArrayList<>();
+        BigDecimal prevEffective = null;
+        for (PriceRecord r : filteredRecords) {
+            BigDecimal effective = r.isOnSale() && r.getSalePrice() != null
+                    ? r.getSalePrice() : r.getRegularPrice();
+            if (prevEffective == null || effective == null
+                    || effective.compareTo(prevEffective) != 0) {
+                deduped.add(r);
+            }
+            prevEffective = effective;
+        }
+
+        List<PricePoint> pricePoints = deduped.stream()
                 .map(r -> new PricePoint(
                         r.isOnSale() && r.getSalePrice() != null ? r.getSalePrice() : r.getRegularPrice(),
                         r.isOnSale(),
@@ -484,7 +500,7 @@ public class PriceAnalysisService {
     ) {}
 
     public ProductListingResponse getProductListingGroupedByStore(
-            List<String> storeIds, List<String> categoryIds, boolean onSaleOnly) {
+            List<String> storeIds, List<String> categoryIds, boolean onSaleOnly, Integer priceDropDays) {
 
         List<Store> stores = storeRepository.findByActiveTrue();
         if (storeIds != null && !storeIds.isEmpty()) {
@@ -500,8 +516,9 @@ public class PriceAnalysisService {
         int totalProducts = 0;
 
         for (Store store : stores) {
-            // Get latest price records for this store (last 7 days)
-            LocalDateTime cutoff = LocalDateTime.now().minusDays(7);
+            // Get latest price records for this store; extend window if priceDropDays requires it
+            int lookbackDays = priceDropDays != null ? Math.max(7, priceDropDays) : 7;
+            LocalDateTime cutoff = LocalDateTime.now().minusDays(lookbackDays);
             List<PriceRecord> records = priceRecordRepository.findByStoreIdAndScrapedAtAfter(store.getId(), cutoff);
 
             // Deduplicate: keep latest per product
@@ -515,6 +532,56 @@ public class PriceAnalysisService {
 
             if (onSaleOnly) {
                 latestByProduct.values().removeIf(r -> !r.isOnSale());
+            }
+
+            // Price drop filter: keep only products whose price actually dropped compared to earlier records
+            if (priceDropDays != null) {
+                // Build the previous record per product (most recent record BEFORE the latest)
+                Map<String, PriceRecord> previousByProduct = new HashMap<>();
+                for (PriceRecord r : records) {
+                    PriceRecord latestForProduct = latestByProduct.get(r.getProductId());
+                    if (latestForProduct == null) continue;
+                    // Skip the latest record itself
+                    if (r.getScrapedAt().equals(latestForProduct.getScrapedAt())
+                            && r.getId().equals(latestForProduct.getId())) continue;
+
+                    PriceRecord existing = previousByProduct.get(r.getProductId());
+                    if (existing == null || r.getScrapedAt().isAfter(existing.getScrapedAt())) {
+                        previousByProduct.put(r.getProductId(), r);
+                    }
+                }
+
+                latestByProduct.entrySet().removeIf(entry -> {
+                    PriceRecord latest = entry.getValue();
+                    PriceRecord previous = previousByProduct.get(entry.getKey());
+                    // No previous record to compare against — not a price drop
+                    if (previous == null) return true;
+
+                    // Compare both regular and sale prices to detect real price changes
+                    BigDecimal latestRegular = latest.getRegularPrice();
+                    BigDecimal previousRegular = previous.getRegularPrice();
+                    BigDecimal latestSale = latest.getSalePrice();
+                    BigDecimal previousSale = previous.getSalePrice();
+
+                    // Calculate effective prices
+                    BigDecimal latestEffective = latest.isOnSale() && latestSale != null
+                            ? latestSale : latestRegular;
+                    BigDecimal previousEffective = previous.isOnSale() && previousSale != null
+                            ? previousSale : previousRegular;
+
+                    if (latestEffective == null || previousEffective == null) return true;
+
+                    // Remove if the effective price didn't actually drop
+                    if (latestEffective.compareTo(previousEffective) >= 0) return true;
+
+                    // Also remove if the underlying prices are the same (only onSale flag changed)
+                    boolean sameRegular = latestRegular != null && previousRegular != null
+                            && latestRegular.compareTo(previousRegular) == 0;
+                    boolean sameSale = (latestSale == null && previousSale == null)
+                            || (latestSale != null && previousSale != null
+                                && latestSale.compareTo(previousSale) == 0);
+                    return sameRegular && sameSale;
+                });
             }
 
             // Resolve products and group by category
@@ -573,9 +640,9 @@ public class PriceAnalysisService {
     }
 
     public CategoryListingResponse getProductListingGroupedByCategory(
-            List<String> storeIds, List<String> categoryIds, boolean onSaleOnly) {
+            List<String> storeIds, List<String> categoryIds, boolean onSaleOnly, Integer priceDropDays) {
 
-        ProductListingResponse byStore = getProductListingGroupedByStore(storeIds, categoryIds, onSaleOnly);
+        ProductListingResponse byStore = getProductListingGroupedByStore(storeIds, categoryIds, onSaleOnly, priceDropDays);
 
         // Pivot: Category -> Store -> Products
         Map<String, Map<String, List<ProductPriceRow>>> catStoreMap = new LinkedHashMap<>();

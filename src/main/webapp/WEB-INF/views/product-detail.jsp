@@ -142,7 +142,7 @@
                 const lowestPrice = data.lowestPrice != null ? parseFloat(data.lowestPrice) : null;
 
                 let html = '<table class="comparison-table"><thead><tr>';
-                html += '<th>Store</th><th>Price</th><th>On Sale</th><th>Promo</th><th></th>';
+                html += '<th>Store</th><th>Price</th><th>On Sale</th><th>Promo</th><th></th><th></th>';
                 html += '</tr></thead><tbody>';
 
                 for (const [storeCode, sp] of entries) {
@@ -162,6 +162,7 @@
                     html += '<td>' + (sp.onSale ? '<span class="discount-badge">Sale</span>' : '-') + '</td>';
                     html += '<td>' + (sp.promoDescription || '-') + '</td>';
                     html += '<td>' + (isLowest ? '<span class="lowest-badge">Lowest</span>' : '') + '</td>';
+                    html += '<td>' + (sp.sourceUrl ? '<a href="' + sp.sourceUrl + '" target="_blank" rel="noopener noreferrer" style="color: var(--accent); text-decoration: none;">View in Store &rarr;</a>' : '') + '</td>';
                     html += '</tr>';
                 }
 

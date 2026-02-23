@@ -16,6 +16,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -75,7 +76,7 @@ class PriceListingControllerTest {
 
     @Test
     void getListing_ReturnsGroupedProducts() throws Exception {
-        when(priceAnalysisService.getProductListingGroupedByStore(anyList(), anyList(), eq(false)))
+        when(priceAnalysisService.getProductListingGroupedByStore(anyList(), anyList(), eq(false), isNull()))
                 .thenReturn(sampleStoreResponse);
 
         mockMvc.perform(get("/api/products/listing"))
@@ -87,12 +88,12 @@ class PriceListingControllerTest {
                 .andExpect(jsonPath("$.groups[0].categories[0].categoryName").value("Dairy"))
                 .andExpect(jsonPath("$.groups[0].categories[0].products[0].name").value("Milk 2%"));
 
-        verify(priceAnalysisService).getProductListingGroupedByStore(anyList(), anyList(), eq(false));
+        verify(priceAnalysisService).getProductListingGroupedByStore(anyList(), anyList(), eq(false), isNull());
     }
 
     @Test
     void getListing_WithStoreFilter_ReturnsFilteredResults() throws Exception {
-        when(priceAnalysisService.getProductListingGroupedByStore(eq(List.of("store-1")), anyList(), eq(false)))
+        when(priceAnalysisService.getProductListingGroupedByStore(eq(List.of("store-1")), anyList(), eq(false), isNull()))
                 .thenReturn(sampleStoreResponse);
 
         mockMvc.perform(get("/api/products/listing")
@@ -100,12 +101,12 @@ class PriceListingControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.groups[0].storeId").value("store-1"));
 
-        verify(priceAnalysisService).getProductListingGroupedByStore(eq(List.of("store-1")), anyList(), eq(false));
+        verify(priceAnalysisService).getProductListingGroupedByStore(eq(List.of("store-1")), anyList(), eq(false), isNull());
     }
 
     @Test
     void getListing_WithCategoryFilter_ReturnsFilteredResults() throws Exception {
-        when(priceAnalysisService.getProductListingGroupedByStore(anyList(), eq(List.of("cat-1")), eq(false)))
+        when(priceAnalysisService.getProductListingGroupedByStore(anyList(), eq(List.of("cat-1")), eq(false), isNull()))
                 .thenReturn(sampleStoreResponse);
 
         mockMvc.perform(get("/api/products/listing")
@@ -113,7 +114,7 @@ class PriceListingControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalProducts").value(2));
 
-        verify(priceAnalysisService).getProductListingGroupedByStore(anyList(), eq(List.of("cat-1")), eq(false));
+        verify(priceAnalysisService).getProductListingGroupedByStore(anyList(), eq(List.of("cat-1")), eq(false), isNull());
     }
 
     @Test
@@ -126,7 +127,7 @@ class PriceListingControllerTest {
         StoreGroup storeGroup = new StoreGroup("Superstore", "store-1", "RCSS", 1, List.of(catGroup));
         ProductListingResponse onSaleResponse = new ProductListingResponse(List.of(storeGroup), 1, 1);
 
-        when(priceAnalysisService.getProductListingGroupedByStore(anyList(), anyList(), eq(true)))
+        when(priceAnalysisService.getProductListingGroupedByStore(anyList(), anyList(), eq(true), isNull()))
                 .thenReturn(onSaleResponse);
 
         mockMvc.perform(get("/api/products/listing")
@@ -135,14 +136,14 @@ class PriceListingControllerTest {
                 .andExpect(jsonPath("$.totalProducts").value(1))
                 .andExpect(jsonPath("$.groups[0].categories[0].products[0].onSale").value(true));
 
-        verify(priceAnalysisService).getProductListingGroupedByStore(anyList(), anyList(), eq(true));
+        verify(priceAnalysisService).getProductListingGroupedByStore(anyList(), anyList(), eq(true), isNull());
     }
 
     @Test
     void getListing_WithNoProducts_ReturnsEmptyResponse() throws Exception {
         ProductListingResponse emptyResponse = new ProductListingResponse(Collections.emptyList(), 0, 0);
 
-        when(priceAnalysisService.getProductListingGroupedByStore(anyList(), anyList(), eq(false)))
+        when(priceAnalysisService.getProductListingGroupedByStore(anyList(), anyList(), eq(false), isNull()))
                 .thenReturn(emptyResponse);
 
         mockMvc.perform(get("/api/products/listing"))
@@ -154,7 +155,7 @@ class PriceListingControllerTest {
 
     @Test
     void getListing_GroupByCategory_ReturnsCorrectGrouping() throws Exception {
-        when(priceAnalysisService.getProductListingGroupedByCategory(anyList(), anyList(), eq(false)))
+        when(priceAnalysisService.getProductListingGroupedByCategory(anyList(), anyList(), eq(false), isNull()))
                 .thenReturn(sampleCategoryResponse);
 
         mockMvc.perform(get("/api/products/listing")
@@ -164,7 +165,54 @@ class PriceListingControllerTest {
                 .andExpect(jsonPath("$.groups[0].categoryName").value("Dairy"))
                 .andExpect(jsonPath("$.groups[0].stores[0].storeName").value("Superstore"));
 
-        verify(priceAnalysisService).getProductListingGroupedByCategory(anyList(), anyList(), eq(false));
+        verify(priceAnalysisService).getProductListingGroupedByCategory(anyList(), anyList(), eq(false), isNull());
+    }
+
+    @Test
+    void getListing_WithPriceDropDays7_PassesParameterToService() throws Exception {
+        when(priceAnalysisService.getProductListingGroupedByStore(anyList(), anyList(), eq(false), eq(7)))
+                .thenReturn(sampleStoreResponse);
+
+        mockMvc.perform(get("/api/products/listing")
+                        .param("priceDropDays", "7"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalProducts").value(2));
+
+        verify(priceAnalysisService).getProductListingGroupedByStore(anyList(), anyList(), eq(false), eq(7));
+    }
+
+    @Test
+    void getListing_WithPriceDropDays30_PassesParameterToService() throws Exception {
+        when(priceAnalysisService.getProductListingGroupedByStore(anyList(), anyList(), eq(false), eq(30)))
+                .thenReturn(sampleStoreResponse);
+
+        mockMvc.perform(get("/api/products/listing")
+                        .param("priceDropDays", "30"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalProducts").value(2));
+
+        verify(priceAnalysisService).getProductListingGroupedByStore(anyList(), anyList(), eq(false), eq(30));
+    }
+
+    @Test
+    void getListing_WithInvalidPriceDropDays_ReturnsBadRequest() throws Exception {
+        mockMvc.perform(get("/api/products/listing")
+                        .param("priceDropDays", "14"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getListing_WithPriceDropDaysAndCategoryGrouping_PassesParameterToService() throws Exception {
+        when(priceAnalysisService.getProductListingGroupedByCategory(anyList(), anyList(), eq(false), eq(7)))
+                .thenReturn(sampleCategoryResponse);
+
+        mockMvc.perform(get("/api/products/listing")
+                        .param("groupBy", "category")
+                        .param("priceDropDays", "7"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.categoryCount").value(1));
+
+        verify(priceAnalysisService).getProductListingGroupedByCategory(anyList(), anyList(), eq(false), eq(7));
     }
 
     @Test

@@ -22,28 +22,35 @@ public class PriceListingController {
 
     private final PriceAnalysisService priceAnalysisService;
 
+    private static final List<Integer> VALID_PRICE_DROP_DAYS = List.of(7, 30);
+
     @GetMapping("/listing")
     @Operation(summary = "Get product listing grouped by store or category")
     public ResponseEntity<?> getListing(
             @RequestParam(required = false) String storeIds,
             @RequestParam(required = false) String categoryIds,
             @RequestParam(defaultValue = "false") boolean onSaleOnly,
-            @RequestParam(defaultValue = "store") String groupBy) {
+            @RequestParam(defaultValue = "store") String groupBy,
+            @RequestParam(required = false) Integer priceDropDays) {
 
-        log.info("Getting product listing: storeIds={}, categoryIds={}, onSaleOnly={}, groupBy={}",
-                storeIds, categoryIds, onSaleOnly, groupBy);
+        if (priceDropDays != null && !VALID_PRICE_DROP_DAYS.contains(priceDropDays)) {
+            return ResponseEntity.badRequest().body("priceDropDays must be 7 or 30");
+        }
+
+        log.info("Getting product listing: storeIds={}, categoryIds={}, onSaleOnly={}, groupBy={}, priceDropDays={}",
+                storeIds, categoryIds, onSaleOnly, groupBy, priceDropDays);
 
         List<String> storeIdList = parseCommaSeparated(storeIds);
         List<String> categoryIdList = parseCommaSeparated(categoryIds);
 
         if ("category".equalsIgnoreCase(groupBy)) {
             CategoryListingResponse response = priceAnalysisService
-                    .getProductListingGroupedByCategory(storeIdList, categoryIdList, onSaleOnly);
+                    .getProductListingGroupedByCategory(storeIdList, categoryIdList, onSaleOnly, priceDropDays);
             return ResponseEntity.ok(response);
         }
 
         ProductListingResponse response = priceAnalysisService
-                .getProductListingGroupedByStore(storeIdList, categoryIdList, onSaleOnly);
+                .getProductListingGroupedByStore(storeIdList, categoryIdList, onSaleOnly, priceDropDays);
         return ResponseEntity.ok(response);
     }
 

@@ -14,6 +14,7 @@ import org.springframework.data.domain.PageRequest;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -30,6 +31,9 @@ class PriceAnalysisServiceTest {
 
     @Mock
     private StoreRepository storeRepository;
+
+    @Mock
+    private CategoryRepository categoryRepository;
 
     @InjectMocks
     private PriceAnalysisService priceAnalysisService;
@@ -227,6 +231,39 @@ class PriceAnalysisServiceTest {
     }
 
     @Test
+    void getProductPriceHistory_DeduplicatesMultipleRecordsPerDay() {
+        LocalDateTime today = LocalDateTime.now();
+        PriceRecord morning = PriceRecord.builder()
+                .productId("prod-123").storeId("store-123")
+                .regularPrice(new BigDecimal("10.00")).onSale(false)
+                .scrapedAt(today.withHour(8).withMinute(0)).build();
+
+        PriceRecord noon = PriceRecord.builder()
+                .productId("prod-123").storeId("store-123")
+                .regularPrice(new BigDecimal("9.00")).onSale(false)
+                .scrapedAt(today.withHour(12).withMinute(0)).build();
+
+        PriceRecord evening = PriceRecord.builder()
+                .productId("prod-123").storeId("store-123")
+                .regularPrice(new BigDecimal("8.00")).onSale(false)
+                .scrapedAt(today.withHour(18).withMinute(0)).build();
+
+        when(productRepository.findById("prod-123")).thenReturn(Optional.of(testProduct));
+        when(storeRepository.findById("store-123")).thenReturn(Optional.of(testStore));
+        when(priceRecordRepository.findByProductIdAndScrapedAtBetween(eq("prod-123"), any(), any()))
+                .thenReturn(List.of(morning, noon, evening));
+
+        PriceAnalysisService.PriceHistory history =
+                priceAnalysisService.getProductPriceHistory("prod-123", "store-123", 7);
+
+        // All 3 have different prices, so all 3 points are kept
+        assertEquals(3, history.pricePoints().size());
+        assertEquals(new BigDecimal("10.00"), history.pricePoints().get(0).price());
+        assertEquals(new BigDecimal("9.00"), history.pricePoints().get(1).price());
+        assertEquals(new BigDecimal("8.00"), history.pricePoints().get(2).price());
+    }
+
+    @Test
     void getCurrentSales_Success() {
         PriceRecord saleRecord = PriceRecord.builder()
                 .productId("prod-123")
@@ -299,5 +336,202 @@ class PriceAnalysisServiceTest {
 
         // Only the 30% drop should be returned
         assertTrue(drops.stream().allMatch(d -> d.dropPercentage() >= 20));
+    }
+
+    @Test
+    void detectPriceDrops_EmptyPriceRecords_ReturnsEmpty() {
+        when(storeRepository.findById("store-123")).thenReturn(Optional.of(testStore));
+        when(priceRecordRepository.findByStoreIdAndScrapedAtAfter(eq("store-123"), any()))
+                .thenReturn(List.of(currentRecord));
+
+        // No previous prices to compare against
+        List<PriceAnalysisService.PriceDrop> drops = priceAnalysisService.detectPriceDrops(
+                "store-123", List.of());
+
+        assertTrue(drops.isEmpty());
+    }
+
+    @Test
+    void detectPriceDrops_SinglePriceRecord_NoDrop() {
+        // Only current records, no previous prices that match
+        PriceRecord unmatchedCurrent = PriceRecord.builder()
+                .productId("prod-999")
+                .storeId("store-123")
+                .regularPrice(new BigDecimal("5.00"))
+                .scrapedAt(LocalDateTime.now())
+                .build();
+
+        when(storeRepository.findById("store-123")).thenReturn(Optional.of(testStore));
+        when(priceRecordRepository.findByStoreIdAndScrapedAtAfter(eq("store-123"), any()))
+                .thenReturn(List.of(unmatchedCurrent));
+
+        List<PriceAnalysisService.PriceDrop> drops = priceAnalysisService.detectPriceDrops(
+                "store-123", List.of(previousRecord));
+
+        // prod-999 has no previous price, prod-123 has no current price
+        assertTrue(drops.isEmpty());
+    }
+
+    // --- Price Drop Filter Tests for getProductListingGroupedByStore ---
+
+    private void setupListingMocks(List<PriceRecord> records, Product product, Category category) {
+        when(storeRepository.findByActiveTrue()).thenReturn(List.of(testStore));
+        when(categoryRepository.findAll()).thenReturn(List.of(category));
+        when(priceRecordRepository.findByStoreIdAndScrapedAtAfter(eq("store-123"), any()))
+                .thenReturn(records);
+        lenient().when(productRepository.findById(product.getId())).thenReturn(Optional.of(product));
+    }
+
+    @Test
+    void listing_priceDropFilter_excludesSamePriceProducts() {
+        testProduct.setCategoryId("cat-1");
+        Category cat = Category.builder().name("Cat").code("C").storeId("store-123").build();
+        cat.setId("cat-1");
+
+        PriceRecord old = PriceRecord.builder()
+                .productId("prod-123").storeId("store-123")
+                .regularPrice(new BigDecimal("10.00")).onSale(false)
+                .scrapedAt(LocalDateTime.now().minusDays(3)).build();
+        old.setId("rec-old");
+
+        PriceRecord latest = PriceRecord.builder()
+                .productId("prod-123").storeId("store-123")
+                .regularPrice(new BigDecimal("10.00")).onSale(false)
+                .scrapedAt(LocalDateTime.now()).build();
+        latest.setId("rec-latest");
+
+        setupListingMocks(List.of(old, latest), testProduct, cat);
+
+        PriceAnalysisService.ProductListingResponse response =
+                priceAnalysisService.getProductListingGroupedByStore(List.of(), List.of(), false, 7);
+
+        assertEquals(0, response.totalProducts());
+    }
+
+    @Test
+    void listing_priceDropFilter_excludesOnSaleFlagChangeOnly() {
+        // Same regularPrice and salePrice, only onSale flag changed — should NOT be a price drop
+        testProduct.setCategoryId("cat-1");
+        Category cat = Category.builder().name("Cat").code("C").storeId("store-123").build();
+        cat.setId("cat-1");
+
+        PriceRecord old = PriceRecord.builder()
+                .productId("prod-123").storeId("store-123")
+                .regularPrice(new BigDecimal("10.00")).salePrice(new BigDecimal("8.00"))
+                .onSale(false).scrapedAt(LocalDateTime.now().minusDays(3)).build();
+        old.setId("rec-old");
+
+        PriceRecord latest = PriceRecord.builder()
+                .productId("prod-123").storeId("store-123")
+                .regularPrice(new BigDecimal("10.00")).salePrice(new BigDecimal("8.00"))
+                .onSale(true).scrapedAt(LocalDateTime.now()).build();
+        latest.setId("rec-latest");
+
+        setupListingMocks(List.of(old, latest), testProduct, cat);
+
+        PriceAnalysisService.ProductListingResponse response =
+                priceAnalysisService.getProductListingGroupedByStore(List.of(), List.of(), false, 7);
+
+        assertEquals(0, response.totalProducts());
+    }
+
+    @Test
+    void listing_priceDropFilter_includesRealPriceDrop() {
+        testProduct.setCategoryId("cat-1");
+        Category cat = Category.builder().name("Cat").code("C").storeId("store-123").build();
+        cat.setId("cat-1");
+
+        PriceRecord old = PriceRecord.builder()
+                .productId("prod-123").storeId("store-123")
+                .regularPrice(new BigDecimal("12.00")).onSale(false)
+                .scrapedAt(LocalDateTime.now().minusDays(3)).build();
+        old.setId("rec-old");
+
+        PriceRecord latest = PriceRecord.builder()
+                .productId("prod-123").storeId("store-123")
+                .regularPrice(new BigDecimal("9.00")).onSale(false)
+                .scrapedAt(LocalDateTime.now()).build();
+        latest.setId("rec-latest");
+
+        setupListingMocks(List.of(old, latest), testProduct, cat);
+
+        PriceAnalysisService.ProductListingResponse response =
+                priceAnalysisService.getProductListingGroupedByStore(List.of(), List.of(), false, 7);
+
+        assertEquals(1, response.totalProducts());
+    }
+
+    @Test
+    void listing_priceDropFilter_includesRealSalePriceDrop() {
+        testProduct.setCategoryId("cat-1");
+        Category cat = Category.builder().name("Cat").code("C").storeId("store-123").build();
+        cat.setId("cat-1");
+
+        PriceRecord old = PriceRecord.builder()
+                .productId("prod-123").storeId("store-123")
+                .regularPrice(new BigDecimal("10.00")).salePrice(new BigDecimal("8.00"))
+                .onSale(true).scrapedAt(LocalDateTime.now().minusDays(3)).build();
+        old.setId("rec-old");
+
+        PriceRecord latest = PriceRecord.builder()
+                .productId("prod-123").storeId("store-123")
+                .regularPrice(new BigDecimal("10.00")).salePrice(new BigDecimal("6.00"))
+                .onSale(true).scrapedAt(LocalDateTime.now()).build();
+        latest.setId("rec-latest");
+
+        setupListingMocks(List.of(old, latest), testProduct, cat);
+
+        PriceAnalysisService.ProductListingResponse response =
+                priceAnalysisService.getProductListingGroupedByStore(List.of(), List.of(), false, 7);
+
+        assertEquals(1, response.totalProducts());
+    }
+
+    @Test
+    void listing_priceDropFilter_excludesSingleRecord() {
+        // Only one record — no previous to compare, should be excluded
+        testProduct.setCategoryId("cat-1");
+        Category cat = Category.builder().name("Cat").code("C").storeId("store-123").build();
+        cat.setId("cat-1");
+
+        PriceRecord only = PriceRecord.builder()
+                .productId("prod-123").storeId("store-123")
+                .regularPrice(new BigDecimal("10.00")).onSale(false)
+                .scrapedAt(LocalDateTime.now()).build();
+        only.setId("rec-only");
+
+        setupListingMocks(List.of(only), testProduct, cat);
+
+        PriceAnalysisService.ProductListingResponse response =
+                priceAnalysisService.getProductListingGroupedByStore(List.of(), List.of(), false, 7);
+
+        assertEquals(0, response.totalProducts());
+    }
+
+    @Test
+    void getCurrentDiscounts_EmptyResults_ReturnsEmptyMap() {
+        when(storeRepository.findByActiveTrue()).thenReturn(List.of(testStore));
+        when(priceRecordRepository.findByScrapedAtAfter(any())).thenReturn(List.of());
+
+        Map<String, List<PriceAnalysisService.DiscountedItem>> result =
+                priceAnalysisService.getAllDiscountedItemsGroupedByStore(10);
+
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void getProductPriceHistory_NoRecords_ReturnsEmptyPoints() {
+        when(productRepository.findById("prod-123")).thenReturn(Optional.of(testProduct));
+        when(storeRepository.findById("store-123")).thenReturn(Optional.of(testStore));
+        when(priceRecordRepository.findByProductIdAndScrapedAtBetween(eq("prod-123"), any(), any()))
+                .thenReturn(List.of());
+
+        PriceAnalysisService.PriceHistory history =
+                priceAnalysisService.getProductPriceHistory("prod-123", "store-123", 30);
+
+        assertNotNull(history);
+        assertEquals(testProduct, history.product());
+        assertEquals(testStore, history.store());
+        assertTrue(history.pricePoints().isEmpty());
     }
 }

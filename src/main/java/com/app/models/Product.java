@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
@@ -16,6 +17,7 @@ import java.util.Map;
 @AllArgsConstructor
 @Builder
 @Document(collection = "products")
+@CompoundIndex(name = "idx_normalizedName_size_unit", def = "{'normalizedName': 1, 'size': 1, 'unit': 1}")
 public class Product extends BaseEntity {
 
     @Indexed
