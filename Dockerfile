@@ -11,22 +11,18 @@ RUN mvn dependency:go-offline -B
 COPY src ./src
 RUN mvn package -DskipTests -B
 
-# Stage 2: Runtime
-FROM eclipse-temurin:17-jre
+# Stage 2: Runtime - use Playwright's official image (browsers + deps pre-installed)
+# Matches Playwright 1.41.0 from pom.xml
+FROM mcr.microsoft.com/playwright/java:v1.41.0-jammy
 
 WORKDIR /app
 
 # Copy the built JAR
 COPY --from=build /app/target/*.jar app.jar
 
-# Install Playwright browsers + system dependencies in one step
-ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
-RUN java -cp app.jar -Dloader.main=com.microsoft.playwright.CLI org.springframework.boot.loader.launch.PropertiesLauncher install --with-deps chromium \
-    && rm -rf /var/lib/apt/lists/*
-
 # Create non-root user
 RUN groupadd -r appuser && useradd -r -g appuser appuser
-RUN chown -R appuser:appuser /app /opt/playwright
+RUN chown -R appuser:appuser /app
 USER appuser
 
 EXPOSE 8080
