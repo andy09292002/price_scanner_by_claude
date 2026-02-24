@@ -16,33 +16,13 @@ FROM eclipse-temurin:17-jre
 
 WORKDIR /app
 
-# Install Playwright system dependencies (Chromium)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libnss3 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libcups2 \
-    libdrm2 \
-    libxkbcommon0 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxfixes3 \
-    libxrandr2 \
-    libgbm1 \
-    libpango-1.0-0 \
-    libcairo2 \
-    libasound2 \
-    libatspi2.0-0 \
-    libwayland-client0 \
-    fonts-noto-cjk \
-    && rm -rf /var/lib/apt/lists/*
-
 # Copy the built JAR
 COPY --from=build /app/target/*.jar app.jar
 
-# Install Playwright browsers (Chromium only to keep image smaller)
+# Install Playwright browsers + system dependencies in one step
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
-RUN java -cp app.jar -Dloader.main=com.microsoft.playwright.CLI org.springframework.boot.loader.launch.PropertiesLauncher install chromium
+RUN java -cp app.jar -Dloader.main=com.microsoft.playwright.CLI org.springframework.boot.loader.launch.PropertiesLauncher install --with-deps chromium \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
 RUN groupadd -r appuser && useradd -r -g appuser appuser
