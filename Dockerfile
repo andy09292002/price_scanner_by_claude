@@ -17,9 +17,9 @@ FROM mcr.microsoft.com/playwright/java:v1.41.0-jammy
 
 WORKDIR /app
 
-# Copy and extract the fat JAR (avoids nested JAR issues with Playwright driver)
-COPY --from=build /app/target/*.jar app.jar
-RUN mkdir -p /app/extracted && cd /app/extracted && jar -xf /app/app.jar && rm /app/app.jar
+# Copy and extract the fat WAR (avoids nested JAR issues with Playwright driver)
+COPY --from=build /app/target/*.war app.war
+RUN mkdir -p /app/extracted && cd /app/extracted && jar -xf /app/app.war && rm /app/app.war
 
 # Create non-root user
 RUN groupadd -r appuser && useradd -r -g appuser appuser
@@ -28,4 +28,4 @@ USER appuser
 
 EXPOSE 8080
 
-ENTRYPOINT ["java", "-cp", "/app/extracted", "org.springframework.boot.loader.launch.JarLauncher"]
+ENTRYPOINT ["java", "-cp", "/app/extracted", "org.springframework.boot.loader.launch.WarLauncher"]

@@ -15,7 +15,7 @@
     <groupId>com.app</groupId>
     <artifactId>mvc-application</artifactId>
     <version>1.0.0-SNAPSHOT</version>
-    <packaging>jar</packaging>
+    <packaging>war</packaging>
     <name>MVC Application</name>
     <description>Spring Boot MVC Application with MongoDB</description>
 
@@ -49,7 +49,6 @@
         <dependency>
             <groupId>org.apache.tomcat.embed</groupId>
             <artifactId>tomcat-embed-jasper</artifactId>
-            <scope>provided</scope>
         </dependency>
 
         <dependency>
