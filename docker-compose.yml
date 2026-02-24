@@ -30,6 +30,8 @@ services:
     environment:
       MONGODB_URI: mongodb://${MONGO_USERNAME:-admin}:${MONGO_PASSWORD:-changeme}@mongodb:27017/${MONGODB_DATABASE:-mango}?authSource=admin
       MONGODB_DATABASE: ${MONGODB_DATABASE:-mango}
+      SPRING_DATA_MONGODB_URI: mongodb://${MONGO_USERNAME:-admin}:${MONGO_PASSWORD:-changeme}@mongodb:27017/${MONGODB_DATABASE:-mango}?authSource=admin
+      SPRING_DATA_MONGODB_DATABASE: ${MONGODB_DATABASE:-mango}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME}
       SUPERSTORE_API_KEY: ${SUPERSTORE_API_KEY:-}
