@@ -68,10 +68,10 @@ logs/
 # Sensitive/Secret Files - CRITICAL
 # =========================
 # Application properties with real credentials
-application.properties
 application-*.properties
-!application.properties.example
 !application-*.properties.example
+# NOTE: application.properties is safe to commit - all secrets use ${ENV_VAR} placeholders
+!src/main/resources/application.properties
 
 # Environment files
 .env

@@ -9,8 +9,9 @@ services:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME:-admin}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-changeme}
       MONGO_INITDB_DATABASE: ${MONGODB_DATABASE:-mango}
-    ports:
-      - "27017:27017"
+    # No host port needed - only the app container connects to MongoDB
+    expose:
+      - "27017"
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
