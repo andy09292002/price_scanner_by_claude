@@ -216,6 +216,138 @@ class PriceListingControllerTest {
     }
 
     @Test
+    void getFlatListing_DefaultParams_ReturnsOk() throws Exception {
+        FlatProductRow row = new FlatProductRow(
+                "prod-1", "Milk 2%", "Dairy Farm", "4L", "L",
+                new BigDecimal("5.99"), new BigDecimal("3.99"), true, 33.4, null,
+                "store-1", "Superstore", "RCSS", "cat-1", "Dairy"
+        );
+        FlatListingResponse response = new FlatListingResponse(List.of(row), 1L, 0, 10, 1);
+
+        when(priceAnalysisService.getFlatProductListing(anyList(), anyList(), eq(false), isNull(),
+                eq(0), eq(10), eq("name"), eq("asc"), isNull()))
+                .thenReturn(response);
+
+        mockMvc.perform(get("/api/products/listing/flat"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalItems").value(1))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(10))
+                .andExpect(jsonPath("$.totalPages").value(1))
+                .andExpect(jsonPath("$.items[0].name").value("Milk 2%"))
+                .andExpect(jsonPath("$.items[0].storeName").value("Superstore"))
+                .andExpect(jsonPath("$.items[0].categoryName").value("Dairy"));
+
+        verify(priceAnalysisService).getFlatProductListing(anyList(), anyList(), eq(false), isNull(),
+                eq(0), eq(10), eq("name"), eq("asc"), isNull());
+    }
+
+    @Test
+    void getFlatListing_InvalidPageSize_ReturnsBadRequest() throws Exception {
+        mockMvc.perform(get("/api/products/listing/flat").param("size", "20"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getFlatListing_NegativePage_ReturnsBadRequest() throws Exception {
+        mockMvc.perform(get("/api/products/listing/flat").param("page", "-1"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getFlatListing_InvalidPriceDropDays_ReturnsBadRequest() throws Exception {
+        mockMvc.perform(get("/api/products/listing/flat").param("priceDropDays", "14"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getFlatListing_WithSearchParam_PassesToService() throws Exception {
+        FlatListingResponse response = new FlatListingResponse(Collections.emptyList(), 0L, 0, 10, 0);
+
+        when(priceAnalysisService.getFlatProductListing(anyList(), anyList(), eq(false), isNull(),
+                eq(0), eq(10), eq("name"), eq("asc"), eq("milk")))
+                .thenReturn(response);
+
+        mockMvc.perform(get("/api/products/listing/flat").param("search", "milk"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalItems").value(0));
+
+        verify(priceAnalysisService).getFlatProductListing(anyList(), anyList(), eq(false), isNull(),
+                eq(0), eq(10), eq("name"), eq("asc"), eq("milk"));
+    }
+
+    @Test
+    void getFlatListing_PageSize25_PassesToService() throws Exception {
+        FlatListingResponse response = new FlatListingResponse(Collections.emptyList(), 0L, 0, 25, 0);
+
+        when(priceAnalysisService.getFlatProductListing(anyList(), anyList(), eq(false), isNull(),
+                eq(0), eq(25), eq("name"), eq("asc"), isNull()))
+                .thenReturn(response);
+
+        mockMvc.perform(get("/api/products/listing/flat").param("size", "25"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.size").value(25));
+    }
+
+    @Test
+    void getFlatListing_PageSize50_PassesToService() throws Exception {
+        FlatListingResponse response = new FlatListingResponse(Collections.emptyList(), 0L, 0, 50, 0);
+
+        when(priceAnalysisService.getFlatProductListing(anyList(), anyList(), eq(false), isNull(),
+                eq(0), eq(50), eq("name"), eq("asc"), isNull()))
+                .thenReturn(response);
+
+        mockMvc.perform(get("/api/products/listing/flat").param("size", "50"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.size").value(50));
+    }
+
+    @Test
+    void getFlatListing_WithSortByPriceDesc_PassesToService() throws Exception {
+        FlatListingResponse response = new FlatListingResponse(Collections.emptyList(), 0L, 0, 10, 0);
+
+        when(priceAnalysisService.getFlatProductListing(anyList(), anyList(), eq(false), isNull(),
+                eq(0), eq(10), eq("price"), eq("desc"), isNull()))
+                .thenReturn(response);
+
+        mockMvc.perform(get("/api/products/listing/flat")
+                        .param("sortBy", "price")
+                        .param("sortDir", "desc"))
+                .andExpect(status().isOk());
+
+        verify(priceAnalysisService).getFlatProductListing(anyList(), anyList(), eq(false), isNull(),
+                eq(0), eq(10), eq("price"), eq("desc"), isNull());
+    }
+
+    @Test
+    void getFlatListing_WithPriceDropDays7_PassesToService() throws Exception {
+        FlatListingResponse response = new FlatListingResponse(Collections.emptyList(), 0L, 0, 10, 0);
+
+        when(priceAnalysisService.getFlatProductListing(anyList(), anyList(), eq(false), eq(7),
+                eq(0), eq(10), eq("name"), eq("asc"), isNull()))
+                .thenReturn(response);
+
+        mockMvc.perform(get("/api/products/listing/flat").param("priceDropDays", "7"))
+                .andExpect(status().isOk());
+
+        verify(priceAnalysisService).getFlatProductListing(anyList(), anyList(), eq(false), eq(7),
+                eq(0), eq(10), eq("name"), eq("asc"), isNull());
+    }
+
+    @Test
+    void getFlatListing_SecondPage_PassesCorrectPageParam() throws Exception {
+        FlatListingResponse response = new FlatListingResponse(Collections.emptyList(), 0L, 1, 10, 0);
+
+        when(priceAnalysisService.getFlatProductListing(anyList(), anyList(), eq(false), isNull(),
+                eq(1), eq(10), eq("name"), eq("asc"), isNull()))
+                .thenReturn(response);
+
+        mockMvc.perform(get("/api/products/listing/flat").param("page", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page").value(1));
+    }
+
+    @Test
     void getListingPage_ReturnsViewName() throws Exception {
         when(storeRepository.findByActiveTrue()).thenReturn(Collections.emptyList());
         when(categoryRepository.findAll()).thenReturn(Collections.emptyList());

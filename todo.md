@@ -138,15 +138,17 @@ Current coverage: ~48% (up from ~30%). Target: 80% per CLAUDE.md.
 
 ## P2 - Medium Priority
 
-### 10. Docker & Containerization
-- [ ] Create `Dockerfile` (multi-stage build: Maven build + JRE runtime)
-- [ ] Create `docker-compose.yml` with services:
-  - Application (Spring Boot)
-  - MongoDB
-  - (Optional) Redis for caching
-- [ ] Add `.dockerignore` file
-- [ ] Document environment variable configuration for Docker
-- [ ] Ensure Playwright works in container (install browser dependencies)
+### ~~10. Docker & Containerization~~ ✅
+- [x] Create `Dockerfile` (multi-stage build: Maven build + Playwright runtime)
+- [x] Create `docker-compose.yml` with services:
+  - Application (Spring Boot WAR)
+  - MongoDB 7
+- [x] Add `.dockerignore` file
+- [x] Add `.env.example` documenting all required environment variables
+- [x] Document environment variable configuration for Docker
+- [x] Ensure Playwright works in container (using `mcr.microsoft.com/playwright/java:v1.41.0-jammy` base image)
+
+**Status:** Completed. Multi-stage Dockerfile builds with Maven, runs on Playwright's official Java image for browser automation support. Docker Compose orchestrates app + MongoDB with health checks. WAR is extracted at build time to avoid nested JAR issues with Playwright driver.
 
 ### 11. CI/CD Pipeline
 - [ ] Create `.github/workflows/ci.yml`:
@@ -300,3 +302,4 @@ Build a web page that displays product prices grouped by store and category, wit
 - [x] Basic unit tests (6 test classes → expanded to 19 test classes, 230 tests passing)
 - [x] Fix PriceSmart data not showing in discount API
 - [x] Global exception handler with consistent JSON error responses
+- [x] Docker & Containerization (multi-stage Dockerfile, docker-compose with MongoDB, Playwright support)

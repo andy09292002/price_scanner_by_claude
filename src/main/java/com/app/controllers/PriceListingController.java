@@ -23,6 +23,7 @@ public class PriceListingController {
     private final PriceAnalysisService priceAnalysisService;
 
     private static final List<Integer> VALID_PRICE_DROP_DAYS = List.of(7, 30);
+    private static final List<Integer> VALID_PAGE_SIZES = List.of(10, 25, 50);
 
     @GetMapping("/listing")
     @Operation(summary = "Get product listing grouped by store or category")
@@ -51,6 +52,41 @@ public class PriceListingController {
 
         ProductListingResponse response = priceAnalysisService
                 .getProductListingGroupedByStore(storeIdList, categoryIdList, onSaleOnly, priceDropDays);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/listing/flat")
+    @Operation(summary = "Get flat paginated product listing")
+    public ResponseEntity<?> getFlatListing(
+            @RequestParam(required = false) String storeIds,
+            @RequestParam(required = false) String categoryIds,
+            @RequestParam(defaultValue = "false") boolean onSaleOnly,
+            @RequestParam(required = false) Integer priceDropDays,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "name") String sortBy,
+            @RequestParam(defaultValue = "asc") String sortDir,
+            @RequestParam(required = false) String search) {
+
+        if (priceDropDays != null && !VALID_PRICE_DROP_DAYS.contains(priceDropDays)) {
+            return ResponseEntity.badRequest().body("priceDropDays must be 7 or 30");
+        }
+        if (!VALID_PAGE_SIZES.contains(size)) {
+            return ResponseEntity.badRequest().body("size must be 10, 25, or 50");
+        }
+        if (page < 0) {
+            return ResponseEntity.badRequest().body("page must be >= 0");
+        }
+
+        log.info("Getting flat product listing: page={}, size={}, sortBy={}, sortDir={}, search={}",
+                page, size, sortBy, sortDir, search);
+
+        List<String> storeIdList = parseCommaSeparated(storeIds);
+        List<String> categoryIdList = parseCommaSeparated(categoryIds);
+
+        PriceAnalysisService.FlatListingResponse response = priceAnalysisService.getFlatProductListing(
+                storeIdList, categoryIdList, onSaleOnly, priceDropDays,
+                page, size, sortBy, sortDir, search);
         return ResponseEntity.ok(response);
     }
 

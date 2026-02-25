@@ -499,6 +499,117 @@ public class PriceAnalysisService {
             int categoryCount
     ) {}
 
+    public record FlatProductRow(
+            String productId,
+            String name,
+            String brand,
+            String size,
+            String unit,
+            BigDecimal regularPrice,
+            BigDecimal salePrice,
+            boolean onSale,
+            double discountPercent,
+            String imageUrl,
+            String storeId,
+            String storeName,
+            String storeCode,
+            String categoryId,
+            String categoryName
+    ) {}
+
+    public record FlatListingResponse(
+            List<FlatProductRow> items,
+            long totalItems,
+            int page,
+            int size,
+            int totalPages
+    ) {}
+
+    public FlatListingResponse getFlatProductListing(
+            List<String> storeIds, List<String> categoryIds,
+            boolean onSaleOnly, Integer priceDropDays,
+            int page, int size, String sortBy, String sortDir, String search) {
+
+        ProductListingResponse grouped = getProductListingGroupedByStore(
+                storeIds, categoryIds, onSaleOnly, priceDropDays);
+
+        List<FlatProductRow> allItems = new ArrayList<>();
+        for (StoreGroup sg : grouped.groups()) {
+            for (CategoryGroup cg : sg.categories()) {
+                for (ProductPriceRow row : cg.products()) {
+                    allItems.add(new FlatProductRow(
+                            row.productId(), row.name(), row.brand(),
+                            row.size(), row.unit(),
+                            row.regularPrice(), row.salePrice(),
+                            row.onSale(), row.discountPercent(), row.imageUrl(),
+                            sg.storeId(), sg.storeName(), sg.storeCode(),
+                            cg.categoryId(), cg.categoryName()
+                    ));
+                }
+            }
+        }
+
+        if (search != null && !search.isBlank()) {
+            String q = search.toLowerCase();
+            allItems = allItems.stream()
+                    .filter(r -> (r.name() != null && r.name().toLowerCase().contains(q))
+                              || (r.brand() != null && r.brand().toLowerCase().contains(q)))
+                    .collect(Collectors.toList());
+        }
+
+        Comparator<FlatProductRow> comparator;
+        String effectiveSortBy = sortBy != null ? sortBy : "name";
+        switch (effectiveSortBy) {
+            case "price":
+                comparator = (a, b) -> {
+                    BigDecimal pa = a.onSale() && a.salePrice() != null ? a.salePrice()
+                            : (a.regularPrice() != null ? a.regularPrice() : BigDecimal.ZERO);
+                    BigDecimal pb = b.onSale() && b.salePrice() != null ? b.salePrice()
+                            : (b.regularPrice() != null ? b.regularPrice() : BigDecimal.ZERO);
+                    return pa.compareTo(pb);
+                };
+                break;
+            case "discount":
+                comparator = Comparator.comparingDouble(FlatProductRow::discountPercent);
+                break;
+            case "store":
+                comparator = (a, b) -> {
+                    String sa = a.storeName() != null ? a.storeName().toLowerCase() : "";
+                    String sb = b.storeName() != null ? b.storeName().toLowerCase() : "";
+                    return sa.compareTo(sb);
+                };
+                break;
+            case "category":
+                comparator = (a, b) -> {
+                    String ca = a.categoryName() != null ? a.categoryName().toLowerCase() : "";
+                    String cb = b.categoryName() != null ? b.categoryName().toLowerCase() : "";
+                    return ca.compareTo(cb);
+                };
+                break;
+            default:
+                comparator = (a, b) -> {
+                    String na = a.name() != null ? a.name().toLowerCase() : "";
+                    String nb = b.name() != null ? b.name().toLowerCase() : "";
+                    return na.compareTo(nb);
+                };
+        }
+        if ("desc".equalsIgnoreCase(sortDir)) {
+            comparator = comparator.reversed();
+        }
+        allItems.sort(comparator);
+
+        long totalItems = allItems.size();
+        int safeSizeVal = Math.max(1, size);
+        int totalPages = totalItems == 0 ? 0 : (int) Math.ceil((double) totalItems / safeSizeVal);
+        int fromIndex = (int) Math.min((long) page * safeSizeVal, totalItems);
+        int toIndex = (int) Math.min((long) fromIndex + safeSizeVal, totalItems);
+
+        return new FlatListingResponse(
+                new ArrayList<>(allItems.subList(fromIndex, toIndex)),
+                totalItems, page, size, totalPages
+        );
+    }
+
     public ProductListingResponse getProductListingGroupedByStore(
             List<String> storeIds, List<String> categoryIds, boolean onSaleOnly, Integer priceDropDays) {
 
