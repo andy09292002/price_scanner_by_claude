@@ -239,20 +239,17 @@ public class PriceAnalysisService {
                 .sorted(Comparator.comparing(PriceRecord::getScrapedAt))
                 .collect(Collectors.toList());
 
-        // Deduplicate: collapse consecutive records with the same effective price
-        List<PriceRecord> deduped = new ArrayList<>();
-        BigDecimal prevEffective = null;
+        // Reduce to one record per calendar day (latest scraped that day)
+        Map<LocalDate, PriceRecord> byDay = new LinkedHashMap<>();
         for (PriceRecord r : filteredRecords) {
-            BigDecimal effective = r.isOnSale() && r.getSalePrice() != null
-                    ? r.getSalePrice() : r.getRegularPrice();
-            if (prevEffective == null || effective == null
-                    || effective.compareTo(prevEffective) != 0) {
-                deduped.add(r);
+            LocalDate day = r.getScrapedAt().toLocalDate();
+            PriceRecord existing = byDay.get(day);
+            if (existing == null || r.getScrapedAt().isAfter(existing.getScrapedAt())) {
+                byDay.put(day, r);
             }
-            prevEffective = effective;
         }
 
-        List<PricePoint> pricePoints = deduped.stream()
+        List<PricePoint> pricePoints = byDay.values().stream()
                 .map(r -> new PricePoint(
                         r.isOnSale() && r.getSalePrice() != null ? r.getSalePrice() : r.getRegularPrice(),
                         r.isOnSale(),
