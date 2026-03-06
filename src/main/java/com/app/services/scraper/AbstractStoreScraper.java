@@ -26,6 +26,15 @@ public abstract class AbstractStoreScraper implements StoreScraper {
     @Value("${scraper.timeout-seconds:30}")
     protected int timeoutSeconds;
 
+    @Value("${scraper.retry.max-attempts:3}")
+    private int maxRetryAttempts;
+
+    @Value("${scraper.retry.initial-delay-seconds:1}")
+    private int retryInitialDelaySeconds;
+
+    @Value("${scraper.retry.backoff-multiplier:2}")
+    private int retryBackoffMultiplier;
+
     private static final Pattern PRICE_PATTERN = Pattern.compile("\\$?([\\d,]+\\.?\\d*)");
 
     protected AbstractStoreScraper(RateLimiterRegistry rateLimiterRegistry) {
@@ -46,9 +55,10 @@ public abstract class AbstractStoreScraper implements StoreScraper {
             try {
                 List<ScrapedProduct> products = scrapeProducts(store, categoryUrl);
                 allProducts.addAll(products);
-                log.info("Scraped {} products from {}", products.size(), categoryUrl);
+                log.info("[{}] Scraped {} products from {}", getStoreCode(), products.size(), categoryUrl);
             } catch (Exception e) {
-                log.error("Error scraping category URL: {}", categoryUrl, e);
+                log.error("[{}] Error scraping category URL {} — skipping and continuing: {}",
+                        getStoreCode(), categoryUrl, e.getMessage());
             }
         }
 
@@ -57,13 +67,40 @@ public abstract class AbstractStoreScraper implements StoreScraper {
 
     protected abstract List<String> getCategoryUrls(Store store);
 
+    protected int getTimeoutSeconds() {
+        return timeoutSeconds;
+    }
+
     protected Document fetchDocument(String url) throws IOException {
         rateLimiter.acquirePermission();
 
-        return Jsoup.connect(url)
-                .userAgent(userAgent)
-                .timeout(timeoutSeconds * 1000)
-                .get();
+        IOException lastException = null;
+        long delayMs = retryInitialDelaySeconds * 1000L;
+
+        for (int attempt = 1; attempt <= maxRetryAttempts; attempt++) {
+            try {
+                return Jsoup.connect(url)
+                        .userAgent(userAgent)
+                        .timeout(getTimeoutSeconds() * 1000)
+                        .get();
+            } catch (IOException e) {
+                lastException = e;
+                if (attempt < maxRetryAttempts) {
+                    log.warn("[{}] HTTP request failed (attempt {}/{}), retrying in {}ms: {}",
+                            getStoreCode(), attempt, maxRetryAttempts, delayMs, e.getMessage());
+                    try {
+                        Thread.sleep(delayMs);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new IOException("Interrupted during retry backoff", ie);
+                    }
+                    delayMs *= retryBackoffMultiplier;
+                }
+            }
+        }
+
+        log.error("[{}] All {} retry attempts exhausted for URL: {}", getStoreCode(), maxRetryAttempts, url);
+        throw lastException;
     }
 
     protected BigDecimal parsePrice(String priceText) {

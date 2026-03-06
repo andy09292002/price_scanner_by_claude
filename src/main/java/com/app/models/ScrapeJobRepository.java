@@ -19,4 +19,8 @@ public interface ScrapeJobRepository extends MongoRepository<ScrapeJob, String> 
     List<ScrapeJob> findByStoreIdAndStartedAtAfter(String storeId, LocalDateTime after);
 
     boolean existsByStoreIdAndStatus(String storeId, ScrapeJob.JobStatus status);
+
+    List<ScrapeJob> findByStoreCode(String storeCode);
+
+    Optional<ScrapeJob> findTopByStoreCodeAndStatusOrderByCompletedAtDesc(String storeCode, ScrapeJob.JobStatus status);
 }

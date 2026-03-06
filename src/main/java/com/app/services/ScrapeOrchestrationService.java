@@ -2,12 +2,16 @@ package com.app.services;
 
 import com.app.models.*;
 import com.app.services.scraper.StoreScraper;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -26,6 +30,7 @@ public class ScrapeOrchestrationService {
     private final ProductMatchingService productMatchingService;
     private final PriceAnalysisService priceAnalysisService;
     private final TelegramNotificationService telegramNotificationService;
+    private final CircuitBreakerRegistry circuitBreakerRegistry;
 
     public ScrapeJob triggerScrape(String storeCode) {
         Store store = storeRepository.findByCode(storeCode)
@@ -93,11 +98,23 @@ public class ScrapeOrchestrationService {
             LocalDateTime oneDayAgo = LocalDateTime.now().minusDays(1);
             previousPrices = priceRecordRepository.findByStoreIdAndScrapedAtAfter(store.getId(), oneDayAgo);
 
-            // Scrape products
-            List<StoreScraper.ScrapedProduct> scrapedProducts = scraper.scrapeAllProducts(store);
-            job.setTotalProducts(scrapedProducts.size());
+            // Scrape products — wrapped in a per-store circuit breaker
+            CircuitBreaker circuitBreaker = circuitBreakerRegistry.circuitBreaker(store.getCode());
+            List<StoreScraper.ScrapedProduct> scrapedProducts;
+            try {
+                scrapedProducts = circuitBreaker.executeSupplier(() -> scraper.scrapeAllProducts(store));
+            } catch (CallNotPermittedException e) {
+                log.warn("[{}] Circuit breaker OPEN — scrape skipped. Store may be temporarily unavailable.", store.getCode());
+                errors.add("Circuit breaker open: scrape skipped. Store temporarily unavailable after repeated failures.");
+                job.setStatus(ScrapeJob.JobStatus.FAILED);
+                job.setErrorMessages(errors);
+                job.setCompletedAt(LocalDateTime.now());
+                scrapeJobRepository.save(job);
+                return;
+            }
 
-            log.info("Scraped {} products from {}", scrapedProducts.size(), store.getName());
+            job.setTotalProducts(scrapedProducts.size());
+            log.info("[{}] Scraped {} products", store.getCode(), scrapedProducts.size());
 
             Set<String> processedProductStoreKeys = new HashSet<>();
             for (StoreScraper.ScrapedProduct scrapedProduct : scrapedProducts) {
@@ -115,7 +132,7 @@ public class ScrapeOrchestrationService {
             job.setStatus(ScrapeJob.JobStatus.COMPLETED);
 
         } catch (Exception e) {
-            log.error("Scrape job failed for store: {}", store.getCode(), e);
+            log.error("[{}] Scrape job failed: {}", store.getCode(), e.getMessage(), e);
             job.setStatus(ScrapeJob.JobStatus.FAILED);
             errors.add("Job failed: " + e.getMessage());
         }
@@ -139,8 +156,7 @@ public class ScrapeOrchestrationService {
             }
         }
 
-        log.info("Scrape job completed for {}: {} success, {} errors",
-                store.getCode(), successCount, errorCount);
+        log.info("[{}] Scrape job finished: {} success, {} errors", store.getCode(), successCount, errorCount);
     }
 
     private void processScrapedProduct(StoreScraper.ScrapedProduct scrapedProduct, Store store,
@@ -180,4 +196,60 @@ public class ScrapeOrchestrationService {
         return storeRepository.findByCode(storeCode)
                 .flatMap(store -> scrapeJobRepository.findTopByStoreIdOrderByStartedAtDesc(store.getId()));
     }
+
+    public List<ScraperMetrics> getAllScraperMetrics() {
+        List<Store> activeStores = storeRepository.findByActiveTrue();
+        return activeStores.stream()
+                .map(store -> buildMetrics(store.getCode()))
+                .toList();
+    }
+
+    public ScraperMetrics getScraperMetrics(String storeCode) {
+        storeRepository.findByCode(storeCode)
+                .orElseThrow(() -> new IllegalArgumentException("Store not found: " + storeCode));
+        return buildMetrics(storeCode);
+    }
+
+    private ScraperMetrics buildMetrics(String storeCode) {
+        List<ScrapeJob> jobs = scrapeJobRepository.findByStoreCode(storeCode);
+        int total = jobs.size();
+        int successful = (int) jobs.stream()
+                .filter(j -> j.getStatus() == ScrapeJob.JobStatus.COMPLETED).count();
+        int failed = (int) jobs.stream()
+                .filter(j -> j.getStatus() == ScrapeJob.JobStatus.FAILED).count();
+        double successRate = total > 0 ? (double) successful / total * 100.0 : 0.0;
+
+        LocalDateTime lastSuccessAt = jobs.stream()
+                .filter(j -> j.getStatus() == ScrapeJob.JobStatus.COMPLETED && j.getCompletedAt() != null)
+                .map(ScrapeJob::getCompletedAt)
+                .max(Comparator.naturalOrder())
+                .orElse(null);
+
+        LocalDateTime lastJobAt = jobs.stream()
+                .filter(j -> j.getStartedAt() != null)
+                .map(ScrapeJob::getStartedAt)
+                .max(Comparator.naturalOrder())
+                .orElse(null);
+
+        String circuitBreakerState;
+        try {
+            CircuitBreaker cb = circuitBreakerRegistry.circuitBreaker(storeCode);
+            circuitBreakerState = cb.getState().name();
+        } catch (Exception e) {
+            circuitBreakerState = "UNKNOWN";
+        }
+
+        return new ScraperMetrics(storeCode, total, successful, failed,
+                Math.round(successRate * 10.0) / 10.0, lastSuccessAt, lastJobAt, circuitBreakerState);
+    }
+
+    public record ScraperMetrics(
+            String storeCode,
+            int totalJobs,
+            int successfulJobs,
+            int failedJobs,
+            double successRate,
+            LocalDateTime lastSuccessAt,
+            LocalDateTime lastJobAt,
+            String circuitBreakerState) {}
 }

@@ -13,6 +13,7 @@ This project is an experiment of how to use Claude Code to generate runnable cod
 - **Price listing page** — JSP-based UI with Chart.js price history charts
 - **Scheduled scraping** — Configurable daily cron schedule (default: 9 AM)
 - **REST API** — Full CRUD with Swagger/OpenAPI documentation
+- **Scraper resilience** — Retry with exponential backoff, per-store circuit breakers, scraper metrics endpoint
 
 ## Tech Stack
 
@@ -21,7 +22,7 @@ This project is an experiment of how to use Claude Code to generate runnable cod
 - Playwright (PriceSmart browser automation)
 - Apache PDFBox (PDF report generation)
 - Chart.js (price history charts)
-- Resilience4j (rate limiting)
+- Resilience4j (rate limiting, circuit breaker, retry)
 - Lombok, Swagger/OpenAPI
 - Maven, JUnit
 
@@ -141,8 +142,10 @@ mvn test
 | GET | `/api/reports/sales/pdf` | Download PDF discount report |
 | GET | `/api/reports/price-drops` | Recent price drops |
 | GET | `/api/reports/history/{id}` | Price history for a product |
-| POST | `/api/scrape/{storeId}` | Trigger scrape for a store |
-| POST | `/api/scrape/all` | Trigger scrape for all stores |
+| POST | `/api/scrape/trigger/{storeCode}` | Trigger scrape for a store |
+| POST | `/api/scrape/trigger/all` | Trigger scrape for all stores |
+| GET | `/api/scrape/metrics` | Scraper success/failure metrics for all stores |
+| GET | `/api/scrape/metrics/{storeCode}` | Scraper metrics for a specific store |
 | POST | `/api/telegram/subscribe` | Subscribe to Telegram notifications |
 
 See Swagger UI at `/swagger-ui.html` for the full API documentation.
@@ -392,3 +395,51 @@ products._id    →  price_records.productId
 - Docker Compose with MongoDB 7, health checks, and volume persistence
 - Non-root user in container for security
 - Added `.dockerignore` and `.env.example` for deployment configuration
+
+### Ninth Iteration
+
+#### Scraper Error Resilience
+
+**Retry with Exponential Backoff**
+- `AbstractStoreScraper.fetchDocument()` now retries failed HTTP requests up to 3 times before giving up
+- Delays follow exponential backoff: 1s → 2s → 4s between attempts
+- All retry parameters are configurable via `application.properties`:
+  - `scraper.retry.max-attempts` (default: 3)
+  - `scraper.retry.initial-delay-seconds` (default: 1)
+  - `scraper.retry.backoff-multiplier` (default: 2)
+- Thread interrupt is handled safely — rethrows as `IOException` immediately
+
+**Per-Store Circuit Breaker**
+- Each store gets its own Resilience4j `CircuitBreaker` instance keyed by store code (WALMART, TNT, RCSS, PRICESMART)
+- Circuit opens after ≥50% failure rate in a sliding window of 5 calls
+- When open, scrape is skipped immediately and job is marked FAILED with a clear message — no waiting for timeouts
+- Circuit moves to half-open after 60s, allowing 2 trial calls before fully closing
+- Configuration via `resilience4j.circuitbreaker.configs.default.*` properties
+
+**Configurable Per-Scraper Timeouts**
+- PriceSmart Playwright timeouts are now configurable (previously hardcoded):
+  - `scraper.timeout.pricesmart.navigate` (default: 60000 ms) — page navigation timeout
+  - `scraper.timeout.pricesmart.selector` (default: 30000 ms) — product card selector timeout
+- JSoup scrapers use the existing global `scraper.timeout-seconds` (default: 30s)
+- `AbstractStoreScraper` exposes `getTimeoutSeconds()` as a protected override point for subclasses
+
+**Graceful Structure Change Handling**
+- Per-category errors now log the store code, full URL, and message — making it easy to pinpoint which category broke
+- Category failures are isolated: other categories continue scraping and their results are saved normally
+
+**Scraper Metrics Endpoint**
+- New endpoints to track success/failure rates per store:
+  - `GET /api/scrape/metrics` — all active stores
+  - `GET /api/scrape/metrics/{storeCode}` — single store
+- Response fields per store: `totalJobs`, `successfulJobs`, `failedJobs`, `successRate` (%), `lastSuccessAt`, `lastJobAt`, `circuitBreakerState` (CLOSED / OPEN / HALF_OPEN)
+- `circuitBreakerState` reflects the live Resilience4j state, not just historical data
+
+**Files Changed**
+| File | Change |
+|------|--------|
+| `AbstractStoreScraper.java` | Retry loop with exponential backoff in `fetchDocument()`; `getTimeoutSeconds()` override hook |
+| `PriceSmartScraper.java` | `@Value`-configurable navigate and selector timeouts |
+| `ScrapeOrchestrationService.java` | Per-store `CircuitBreaker`; `CallNotPermittedException` fallback; `getScraperMetrics()` / `getAllScraperMetrics()` methods; `ScraperMetrics` record |
+| `ScrapeController.java` | `GET /api/scrape/metrics` and `GET /api/scrape/metrics/{storeCode}` endpoints |
+| `ScrapeJobRepository.java` | `findByStoreCode()` query method |
+| `application.properties` | Retry config, circuit breaker defaults, PriceSmart timeout properties |

@@ -9,6 +9,7 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PreDestroy;
@@ -154,6 +155,12 @@ public class PriceSmartScraper extends AbstractStoreScraper {
     private Playwright playwright;
     private Browser browser;
 
+    @Value("${scraper.timeout.pricesmart.navigate:60000}")
+    private int navigateTimeoutMs;
+
+    @Value("${scraper.timeout.pricesmart.selector:30000}")
+    private int selectorTimeoutMs;
+
     public PriceSmartScraper(RateLimiterRegistry rateLimiterRegistry) {
         super(rateLimiterRegistry);
     }
@@ -253,7 +260,7 @@ public class PriceSmartScraper extends AbstractStoreScraper {
             log.info("Navigating to: {}", url);
 
             // Navigate and wait for page load
-            page.navigate(url, new Page.NavigateOptions().setTimeout(60000));
+            page.navigate(url, new Page.NavigateOptions().setTimeout(navigateTimeoutMs));
             page.waitForLoadState(LoadState.DOMCONTENTLOADED);
             log.info("Page loaded, waiting for content...");
 
@@ -276,7 +283,7 @@ public class PriceSmartScraper extends AbstractStoreScraper {
             try {
                 log.info("Waiting for ProductCardWrapper...");
                 page.waitForSelector("article[class*=ProductCardWrapper]",
-                        new Page.WaitForSelectorOptions().setTimeout(30000));
+                        new Page.WaitForSelectorOptions().setTimeout(selectorTimeoutMs));
                 log.info("Found ProductCardWrapper elements");
             } catch (Exception e) {
                 log.warn("Could not find ProductCardWrapper: {}", e.getMessage());

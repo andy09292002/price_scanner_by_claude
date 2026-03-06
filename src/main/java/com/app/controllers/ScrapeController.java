@@ -69,4 +69,21 @@ public class ScrapeController {
                 .orElseThrow(() -> new ResourceNotFoundException("No scrape job found for store: " + storeCode.toUpperCase()));
         return ResponseEntity.ok(job);
     }
+
+    @GetMapping("/metrics")
+    @Operation(summary = "Get scraper metrics for all stores",
+               description = "Returns success/failure rates, last run times, and circuit breaker state for each active store.")
+    public ResponseEntity<List<ScrapeOrchestrationService.ScraperMetrics>> getAllMetrics() {
+        return ResponseEntity.ok(scrapeOrchestrationService.getAllScraperMetrics());
+    }
+
+    @GetMapping("/metrics/{storeCode}")
+    @Operation(summary = "Get scraper metrics for a specific store",
+               description = "Returns success/failure rates, last run times, and circuit breaker state for the given store.")
+    public ResponseEntity<ScrapeOrchestrationService.ScraperMetrics> getStoreMetrics(
+            @Parameter(description = "Store code (RCSS, WALMART, PRICESMART, TNT)")
+            @PathVariable @NotBlank(message = "Store code must not be blank") String storeCode) {
+
+        return ResponseEntity.ok(scrapeOrchestrationService.getScraperMetrics(storeCode.toUpperCase()));
+    }
 }

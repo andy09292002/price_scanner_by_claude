@@ -126,13 +126,15 @@ Current coverage: ~48% (up from ~30%). Target: 80% per CLAUDE.md.
 
 **Status:** Completed. PDF report generated using Apache PDFBox 3.0.1 with product images, pricing details, discount percentages, and summary stats. Endpoint: `GET /api/reports/sales/pdf?store=&category=&minDiscountPercentage=10`.
 
-### 9. Scraper Error Resilience
-- [ ] Add retry logic with exponential backoff for HTTP failures (network timeouts, 5xx responses)
-- [ ] Add circuit breaker pattern per store (Resilience4j `@CircuitBreaker`)
-- [ ] Handle store website structure changes gracefully (log warnings, don't crash)
-- [ ] Add timeout configuration per scraper (currently hardcoded 30s)
-- [ ] Add fallback responses when scraper fails (return partial results instead of nothing)
-- [ ] Track and report scraper success/failure rates per store
+### ~~9. Scraper Error Resilience~~ ✅
+- [x] Add retry logic with exponential backoff for HTTP failures (network timeouts, 5xx responses)
+- [x] Add circuit breaker pattern per store (Resilience4j `CircuitBreakerRegistry`, one instance per store code)
+- [x] Handle store website structure changes gracefully (log warnings per category, don't crash other categories)
+- [x] Add timeout configuration per scraper (PriceSmart navigate/selector timeouts now configurable; JSoup scrapers use global `scraper.timeout-seconds`)
+- [x] Add fallback responses when scraper fails (circuit breaker open → job FAILED, partial results still saved)
+- [x] Track and report scraper success/failure rates per store (`GET /api/scrape/metrics`, `GET /api/scrape/metrics/{storeCode}`)
+
+**Status:** Completed. Retry adds up to 3 attempts with 1s/2s/4s exponential backoff in `fetchDocument()`. Each store gets its own Resilience4j circuit breaker (opens after ≥50% failures in 5-call window, resets after 60s). PriceSmart timeouts configurable via `scraper.timeout.pricesmart.navigate` and `scraper.timeout.pricesmart.selector`.
 
 ---
 
